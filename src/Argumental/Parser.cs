@@ -78,7 +78,7 @@ namespace Argumental
         }
         else // Key
         {
-          var propName = tokens[i].Value.TrimStart('-', '/');
+          var propName = tokens[i].Value;
           var prop = properties.FirstOrDefault(p => _optionComparer.Equals(p.Path.ToString(), propName));
           if (i + 1 < tokens.Count && tokens[i + 1].Type == TokenType.Value)
           {
@@ -164,7 +164,7 @@ namespace Argumental
         // If the switch is a key in given switch mappings, interpret it
         if (_pipeline.SwitchMappings.TryGetValue(keySegment, out string mappedKeySegment))
         {
-          result.Add(new Token(TokenType.Key, mappedKeySegment));
+          result.Add(new Token(TokenType.Key, mappedKeySegment.TrimStart('-', '/')));
         }
         else if (keyStartIndex == 1 && separator < 0)
         {

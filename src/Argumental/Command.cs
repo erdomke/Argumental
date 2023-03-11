@@ -9,9 +9,15 @@ namespace Argumental
   {
     public IList<IOptionProvider> Providers { get; } = new List<IOptionProvider>();
     public ConfigPath Name { get; }
+    public string Description
+    {
+      get { return Name.OfType<ConfigSection>().Last().Description; }
+      set { Name.OfType<ConfigSection>().Last().Description = value; }
+    }
     public IEnumerable<IProperty> Properties => Providers.SelectMany(p => p.Properties);
     public Action<ParseContext> Matcher { get; set; }
     public Func<IConfigHandler<TResult>, IConfigurationRoot, TResult> Handler { get; set; }
+    public bool AllowUnrecognizedTokens { get; set; }
 
     public Command(string name = "", string description = null)
     {

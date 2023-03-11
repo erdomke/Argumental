@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace Argumental
 {
-  internal class Option<T> : IOptionProvider<T>, IProperty
+  public class Option<T> : IOptionProvider<T>, IProperty
   {
     private List<ValidationAttribute> _validators = new List<ValidationAttribute>();
     private Func<string, T> _converter;

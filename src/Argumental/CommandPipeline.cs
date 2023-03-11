@@ -22,6 +22,8 @@ namespace Argumental
     /// </summary>
     public IReadOnlyList<string> Args { get; set; } = Array.Empty<string>();
 
+    public string Description { get; set; }
+
     public Parser GetParser()
     {
       return new Parser(_optionComparer, this);
@@ -44,9 +46,9 @@ namespace Argumental
         throw new InvalidOperationException("Command pipeline was not added to the configuration builder.");
       if (command.Handler == null)
         throw new InvalidOperationException("Command does not have a handler.");
-      if (parser.UnrecognizedTokens.Count > 0)
+      if (parser.UnrecognizedTokens.Count > 0 && !command.AllowUnrecognizedTokens)
         throw new CommandException("Unexpected options were included on the command line: " + string.Join(", ", parser.UnrecognizedTokens)
-          , Commands, command, null);
+          , this, command, null);
       return command.Handler.Invoke(command, configuration);
     }
     
@@ -81,6 +83,12 @@ namespace Argumental
       return this;
     }
 
+    public CommandPipeline<TResult> AddDescription(string description)
+    {
+      Description = description;
+      return this;
+    }
+
     public CommandPipeline<TResult> AddOptionComparer(IEqualityComparer<string> optionComparer)
     {
       _optionComparer = optionComparer;
@@ -90,24 +98,56 @@ namespace Argumental
     public static CommandPipeline<TResult> Default()
     {
       var result = new CommandPipeline<TResult>();
+      var helpAliases = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "?", "h", "help" };
       var helpCommand = new Command<TResult>("help")
       {
+        AllowUnrecognizedTokens = true,
         Matcher = context =>
         {
-          if (context.Tokens.Any(t => t.Type == TokenType.Key && string.Equals(t.Value, "help", StringComparison.OrdinalIgnoreCase)))
+          if (context.Tokens.Count > 0
+            && context.Tokens[0].Type != TokenType.Key
+            && string.Equals(context.Tokens[0].Value, "help", StringComparison.OrdinalIgnoreCase))
           {
             context.Success = true;
-            context.Tokens.Clear();
+          }
+          else
+          {
+            var idx = context.Tokens
+              .FindIndex(t => t.Type == TokenType.Key && helpAliases.Contains(t.Value));
+            if (idx >= 0)
+            {
+              context.Success = true;
+              var command = default(Token);
+              if (idx > 0
+                && context.Tokens[0].Type != TokenType.Key)
+              {
+                command = context.Tokens[0];
+              }
+              context.Tokens.Clear();
+              context.Tokens.Add(new Token(TokenType.Value, "help"));
+              if (!string.IsNullOrEmpty(command.Value))
+                context.Tokens.Add(command);
+            }
           }
         }
       };
+      var commandNameOpt = new Option<string>(isPositional: true);
+      helpCommand.Providers.Add(commandNameOpt);
       helpCommand.Handler = (_, config) =>
       {
-        throw new InvalidOperationException("Help called");
+        var command = default(ICommand);
+        if (commandNameOpt.TryGet(config, null, out var commandName)
+          && !string.IsNullOrEmpty(commandName))
+        {
+          command = result.Commands.FirstOrDefault(c => string.Equals(c.Name.ToString(), commandName, StringComparison.OrdinalIgnoreCase));
+        }
+        throw new CommandException("Help requested.", result, command, null);
       };
+      result.AddCommand(helpCommand);
 
       var versionCommand = new Command<TResult>("version")
       {
+        AllowUnrecognizedTokens = true,
         Matcher = context =>
         {
           if (context.Tokens.Any(t => t.Type == TokenType.Key && string.Equals(t.Value, "version", StringComparison.OrdinalIgnoreCase)))
@@ -115,13 +155,13 @@ namespace Argumental
             context.Success = true;
             context.Tokens.Clear();
           }
+        },
+        Handler = (_, config) =>
+        {
+          throw new VersionException("Version requested.");
         }
       };
-      helpCommand.Handler = (_, config) =>
-      {
-        throw new InvalidOperationException("Help called");
-      };
-      return result.AddCommand(helpCommand);
+      return result.AddCommand(versionCommand);
     }
   }
 }

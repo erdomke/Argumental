@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace Argumental
 {
@@ -22,7 +23,10 @@ namespace Argumental
 
     public int Run<T>(CommandPipeline<T> pipeline)
     {
-      return Run(() => pipeline.Run());
+      return RunAsync(() => {
+        pipeline.Run();
+        return Task.FromResult(Environment.ExitCode);
+      }).Result;
     }
 
     public int Run(CommandPipeline<int> pipeline)
@@ -32,17 +36,41 @@ namespace Argumental
 
     public int Run(Func<int> callback)
     {
-      return Run(() => {
-        Environment.ExitCode = callback();
-      });
+      return RunAsync(() => Task.FromResult(callback())).Result;
     }
 
     public int Run(Action callback)
     {
+      return RunAsync(() => {
+        callback();
+        return Task.FromResult(Environment.ExitCode);
+      }).Result;
+    }
+
+    public Task<int> RunAsync<T>(CommandPipeline<Task<T>> pipeline)
+    {
+      return RunAsync(pipeline.Run);
+    }
+
+    public Task<int> RunAsync(CommandPipeline<Task<int>> pipeline)
+    {
+      return RunAsync(pipeline.Run);
+    }
+
+    public Task<int> RunAsync(Func<Task> callback)
+    {
+      return RunAsync(async () =>
+      {
+        await callback().ConfigureAwait(false);
+        return Environment.ExitCode;
+      });
+    }
+
+    public async Task<int> RunAsync(Func<Task<int>> callback)
+    {
       try
       {
-        callback();
-        return Environment.ExitCode;
+        Environment.ExitCode = await callback().ConfigureAwait(false);
       }
       catch (Exception ex)
       {
@@ -63,9 +91,10 @@ namespace Argumental
           }
         }
 
-        Environment.ExitCode = exitCode ?? Environment.ExitCode;
-        return Environment.ExitCode == 0 ? (int)ExitCode.Failure : Environment.ExitCode;
+        Environment.ExitCode = exitCode ?? 
+          (Environment.ExitCode == 0 ? (int)ExitCode.Failure : Environment.ExitCode);
       }
+      return Environment.ExitCode;
     }
 
     public static CommandApp Default()

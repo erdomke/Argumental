@@ -26,5 +26,24 @@
         Console.SetError(origErr);
       }
     }
+
+    public static async Task<CommandResult> RunAsync(string[] args, Func<string[], Task<int>> command)
+    {
+      var origOut = Console.Out;
+      var origErr = Console.Error;
+      try
+      {
+        var result = new CommandResult();
+        Console.SetOut(result.Out);
+        Console.SetError(result.Error);
+        result.ExitCode = await command(args);
+        return result;
+      }
+      finally
+      {
+        Console.SetOut(origOut);
+        Console.SetError(origErr);
+      }
+    }
   }
 }

@@ -7,14 +7,14 @@ namespace Argumental
 {
   public class CommandException : Exception
   {
-    public IEnumerable<ICommand> AllCommands { get; }
+    public ICommandPipeline Pipeline { get; }
     public ICommand SelectedCommand { get; }
     public IEnumerable<ValidationResult> ValidationErrors { get; }
 
-    internal CommandException(string message, IEnumerable<ICommand> allCommands, ICommand selectedCommand, IEnumerable<ValidationResult> validationErrors) 
+    internal CommandException(string message, ICommandPipeline pipeline, ICommand selectedCommand, IEnumerable<ValidationResult> validationErrors) 
       : base(message)
     {
-      AllCommands = allCommands ?? Enumerable.Empty<ICommand>();
+      Pipeline = pipeline;
       SelectedCommand = selectedCommand;
       ValidationErrors = validationErrors ?? Enumerable.Empty<ValidationResult>();
     }
