@@ -1,13 +1,24 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Reflection;
 
 namespace Argumental
 {
   internal static class Reflection
   {
-    public static bool IsConvertibleFromString(Type type)
+    public static IEnumerable<Type> ParentsAndSelf(this Type type)
+    {
+      var curr = type;
+      while (curr != null && curr != typeof(object))
+      {
+        yield return curr;
+        curr = curr.BaseType;
+      }
+    }
+
+    public static bool IsConvertibleFromString(this Type type)
     {
       // The configuration binder has hard-coded support for base64.
       if (type == typeof(object)
@@ -38,7 +49,9 @@ namespace Argumental
       else
       {
         elementType = default;
-        var interfaces = type.GetInterfaces();
+        var interfaces = (IEnumerable<Type>)type.GetInterfaces();
+        if (type.IsInterface)
+          interfaces = new[] { type }.Concat(interfaces); 
         foreach (var iface in interfaces)
         {
           if (iface.IsGenericType)

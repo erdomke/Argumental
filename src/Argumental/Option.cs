@@ -48,21 +48,32 @@ namespace Argumental
       }
     }
 
-    public T Get(IConfiguration configuration)
+    public bool TryGet(IConfiguration configuration, List<ValidationResult> validationResults, out T value)
     {
       if (_converter == null)
-        return configuration.GetValue<T>(Path.ToString(), DefaultValue);
-
-      var value = configuration.GetSection(Path.ToString()).Value;
-      if (value == null)
-        return DefaultValue;
+      {
+        value = configuration.GetValue(Path.ToString(), DefaultValue);
+      }
       else
-        return _converter(value);
+      {
+        var str = configuration.GetSection(Path.ToString()).Value;
+        if (str == null)
+          value = DefaultValue;
+        else
+          value = _converter(str);
+      }
+
+      return Validator.TryValidateValue(value, new ValidationContext(this)
+      {
+        MemberName = Path.Last().ToString()
+      }, validationResults, Validations);
     }
 
-    object IOptionProvider.Get(IConfiguration configuration)
+    bool IOptionProvider.TryGet(IConfiguration configuration, List<ValidationResult> validationResults, out object value)
     {
-      return Get(configuration);
+      var result = TryGet(configuration, validationResults, out var typed);
+      value = typed;
+      return result;
     }
   }
 }

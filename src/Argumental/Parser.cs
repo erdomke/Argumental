@@ -8,14 +8,16 @@ namespace Argumental
 {
   public class Parser : ConfigurationProvider
   {
+    private readonly IEqualityComparer<string> _optionComparer;
     private ICommandPipeline _pipeline;
 
     public ICommand Command { get; private set; }
 
     public List<string> UnrecognizedTokens { get; } = new List<string>();
 
-    internal Parser(ICommandPipeline pipeline)
+    internal Parser(IEqualityComparer<string> optionComparer, ICommandPipeline pipeline)
     {
+      _optionComparer = optionComparer;
       _pipeline = pipeline;
     }
 
@@ -26,7 +28,7 @@ namespace Argumental
 
     public Dictionary<string, string> Parse()
     {
-      var data = new Dictionary<string, string>();
+      var data = new Dictionary<string, string>(_optionComparer);
       var tokens = Tokenize();
       foreach (var command in _pipeline.Commands)
       {
@@ -52,7 +54,7 @@ namespace Argumental
         }
         else if (tokens[i].Type == TokenType.Value)
         {
-          var prop = properties.Where(p => p.IsPositional).Skip(i).FirstOrDefault();
+          var prop = properties.Where(p => p.IsPositional).Skip(position).FirstOrDefault();
           if (prop == null)
           {
             UnrecognizedTokens.Add("[Position " + position + "]");
@@ -66,39 +68,41 @@ namespace Argumental
               data[propKeyPrefix + (listIdx - i)] = tokens[listIdx].Value;
               listIdx++;
             }
-            listIdx--;
+            i = listIdx - 1;
           }
           else
           {
             data[prop.Path.ToString()] = tokens[i].Value;
           }
+          position++;
         }
         else // Key
         {
-          var prop = properties.FirstOrDefault(p => p.Path.ToString() == tokens[i].Value);
+          var propName = tokens[i].Value.TrimStart('-', '/');
+          var prop = properties.FirstOrDefault(p => _optionComparer.Equals(p.Path.ToString(), propName));
           if (i + 1 < tokens.Count && tokens[i + 1].Type == TokenType.Value)
           {
             if (prop != null && IsList(prop.Type))
             {
               var listIdx = i + 1;
-              var propKeyPrefix = tokens[i].Value + ":";
+              var propKeyPrefix = propName + ":";
               while (listIdx < tokens.Count && tokens[listIdx].Type == TokenType.Value)
               {
-                data[propKeyPrefix + (listIdx - i)] = tokens[listIdx].Value;
+                data[propKeyPrefix + (listIdx - i - 1)] = tokens[listIdx].Value;
                 listIdx++;
               }
-              listIdx--;
+              i = listIdx - 1;
             }
             else
             {
               i++;
-              data[tokens[i - 1].Value] = tokens[i].Value;
+              data[propName] = tokens[i].Value;
             }
           }
           else
           {
             if (prop == null || prop.Type == typeof(bool))
-              data[tokens[i].Value] = "true";
+              data[propName] = "true";
             else
               UnrecognizedTokens.Add(tokens[i].Value);
           }

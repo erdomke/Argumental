@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Security;
@@ -102,17 +103,22 @@ namespace Argumental
       };
     }
 
-    public T Get(IConfiguration configuration)
+    public bool TryGet(IConfiguration configuration, List<ValidationResult> validationResults, out T value)
     {
       var config = configuration;
       if (_parents?.Count > 0)
         config = config.GetSection(_parents.ToString());
-      return config.Get<T>();
+      value = config.Get<T>();
+      if (value == null)
+        value = Activator.CreateInstance<T>();
+      return Validator.TryValidateObject(value, new ValidationContext(value), validationResults, true);
     }
 
-    object IOptionProvider.Get(IConfiguration configuration)
+    bool IOptionProvider.TryGet(IConfiguration configuration, List<ValidationResult> validationResults, out object value)
     {
-      return Get(configuration);
+      var result = TryGet(configuration, validationResults, out var typed);
+      value = typed;
+      return result;
     }
 
     private class Property : IProperty

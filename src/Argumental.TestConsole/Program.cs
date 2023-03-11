@@ -6,21 +6,16 @@ namespace Argumental.TestConsole
   {
     static int Main(string[] args)
     {
-      var rootCommand = new Command<int>("");
-      //rootCommand.SetHandler(file =>
-      //{
-      //  return 0;
-      //}, new Option<FileInfo>("file", "The file to read and display on the console."));
-
-      rootCommand.SetHandler(options =>
-      {
-        return 0;
-      }, new OptionSet<ConfigTest>());
-
-      return CommandPipeline<int>.Default()
-        .AddArgs(new[] { "--file", "thing.txt" })
-        .AddCommand(rootCommand)
-        .Run();
+      return CommandApp.Default()
+        .Run(CommandPipeline<int>.Default()
+          .AddArgs(args)
+          .AddCommand("", c =>
+          {
+            c.SetHandler(options =>
+            {
+              return 0;
+            }, new OptionSet<ConfigTest>());
+          }));
     }
 
     private class ConfigTest

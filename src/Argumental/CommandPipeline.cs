@@ -8,6 +8,7 @@ namespace Argumental
   public class CommandPipeline<TResult> : ICommandPipeline
   {
     private readonly List<Command<TResult>> _commands = new List<Command<TResult>>();
+    private IEqualityComparer<string> _optionComparer = StringComparer.OrdinalIgnoreCase;
 
     public IEnumerable<ICommand> Commands => _commands;
 
@@ -23,7 +24,7 @@ namespace Argumental
 
     public Parser GetParser()
     {
-      return new Parser(this);
+      return new Parser(_optionComparer, this);
     }
 
     public IConfigurationRoot Build()
@@ -40,9 +41,12 @@ namespace Argumental
     {
       var parser = configuration.Providers.OfType<Parser>().FirstOrDefault();
       if (parser == null || !(parser.Command is Command<TResult> command))
-        throw new InvalidOperationException("Command pipeline was not added to the configuration builder");
+        throw new InvalidOperationException("Command pipeline was not added to the configuration builder.");
       if (command.Handler == null)
-        throw new InvalidOperationException("Command does not have a handler");
+        throw new InvalidOperationException("Command does not have a handler.");
+      if (parser.UnrecognizedTokens.Count > 0)
+        throw new CommandException("Unexpected options were included on the command line: " + string.Join(", ", parser.UnrecognizedTokens)
+          , Commands, command, null);
       return command.Handler.Invoke(command, configuration);
     }
     
@@ -51,15 +55,35 @@ namespace Argumental
       return GetParser();
     }
 
-    public CommandPipeline<TResult> AddCommand(Command<TResult> command)
+    public CommandPipeline<TResult> AddAlias(string alias, string full)
     {
-      _commands.Add(command);
+      SwitchMappings.Add(alias, full);
       return this;
     }
 
     public CommandPipeline<TResult> AddArgs(IReadOnlyList<string> args)
     {
       Args = args;
+      return this;
+    }
+
+    public CommandPipeline<TResult> AddCommand(Command<TResult> command)
+    {
+      _commands.Add(command);
+      return this;
+    }
+
+    public CommandPipeline<TResult> AddCommand(string name, Action<Command<TResult>> builder)
+    {
+      var command = new Command<TResult>(name);
+      _commands.Add(command);
+      builder(command);
+      return this;
+    }
+
+    public CommandPipeline<TResult> AddOptionComparer(IEqualityComparer<string> optionComparer)
+    {
+      _optionComparer = optionComparer;
       return this;
     }
 

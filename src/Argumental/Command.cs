@@ -45,11 +45,6 @@ namespace Argumental
       }
     }
 
-    public IReadOnlyList<object> GetOptions(IConfigurationRoot configuration)
-    {
-      return Providers.Select(p => p.Get(configuration)).ToList();
-    }
-
     private void MatchAll(ParseContext context)
     {
       context.Success = true;

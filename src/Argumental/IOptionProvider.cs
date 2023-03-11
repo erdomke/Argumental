@@ -1,14 +1,16 @@
 ﻿using Microsoft.Extensions.Configuration;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace Argumental
 {
   public interface IOptionProvider : ISchemaProvider
   {
-    object Get(IConfiguration configuration);
+    bool TryGet(IConfiguration configuration, List<ValidationResult> validationResults, out object value);
   }
 
   public interface IOptionProvider<TOption> : IOptionProvider
   {
-    TOption Get(IConfiguration configuration);
+    bool TryGet(IConfiguration configuration, List<ValidationResult> validationResults, out TOption value);
   }
 }
