@@ -104,6 +104,7 @@ namespace Argumental
             && string.Equals(context.Tokens[0].Value, name, StringComparison.OrdinalIgnoreCase))
           {
             context.Success = true;
+            context.Tokens.RemoveAt(0);
           }
           else
           {
@@ -112,29 +113,27 @@ namespace Argumental
             if (idx >= 0)
             {
               context.Success = true;
-              var command = default(Token);
-              if (idx > 0
-                && context.Tokens[0].Type != TokenType.Key)
-              {
-                command = context.Tokens[0];
-              }
-              context.Tokens.Clear();
-              context.Tokens.Add(new Token(TokenType.Value, name));
-              if (!string.IsNullOrEmpty(command.Value))
-                context.Tokens.Add(command);
             }
           }
         }
       };
-      var commandNameOpt = new Option<string>(isPositional: true);
+      var commandNameOpt = new Option<List<string>>("command", isPositional: true);
       helpCommand.Providers.Add(commandNameOpt);
       helpCommand.Handler = (_, config) =>
       {
         var command = default(ICommand);
-        if (commandNameOpt.TryGet(config, null, out var commandName)
-          && !string.IsNullOrEmpty(commandName))
+        if (commandNameOpt.TryGet(config, null, out var commandNames))
         {
-          command = Commands.FirstOrDefault(c => string.Equals(c.Name.ToString(), commandName, StringComparison.OrdinalIgnoreCase));
+          foreach (var cmd in Commands)
+          {
+            var context = new ParseContext(commandNames.Select(n => new Token(TokenType.Value, n)));
+            cmd.Matcher?.Invoke(context);
+            if (context.Success)
+            {
+              command = cmd;
+              break;
+            }
+          }
         }
         throw new ConfigurationException(this, command, null);
       }; 

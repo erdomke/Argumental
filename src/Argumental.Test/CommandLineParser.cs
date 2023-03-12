@@ -28,7 +28,7 @@ namespace Argumental.Test
                 else
                   Console.WriteLine("Normal output.");
                 return 0;
-              }, new OptionSet<Options>());
+              }, new Option<Options>());
             }));
       }
     }
@@ -76,7 +76,7 @@ namespace Argumental.Test
                 Console.Write(o.Offset.HasValue ? o.Offset.Value.ToString() + ", " : "null, ");
                 Console.Write(string.Join(", ", o.InputFiles));
                 return 0;
-              }, new OptionSet<Options>());
+              }, new Option<Options>());
             }));
       }
     }

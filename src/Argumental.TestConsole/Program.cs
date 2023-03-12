@@ -18,7 +18,7 @@ namespace Argumental.TestConsole
             c.SetHandler(options =>
             {
               return 0;
-            }, new OptionSet<ConfigTest>());
+            }, new Option<ConfigTest>());
           }));
     }
 
