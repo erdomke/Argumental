@@ -5,12 +5,12 @@ using System.Linq;
 
 namespace Argumental
 {
-  public class CommandPipeline<TResult> : ICommandPipeline
+  public class CommandPipeline<TResult> : ICommandPipeline, IConfigurationBuilderSource
   {
     private readonly List<Command<TResult>> _commands = new List<Command<TResult>>();
     private IEqualityComparer<string> _optionComparer = StringComparer.OrdinalIgnoreCase;
 
-    public IEnumerable<ICommand> Commands => _commands;
+    public IReadOnlyList<ICommand> Commands => _commands;
 
     /// <summary>
     /// Gets or sets the switch mappings.
@@ -22,7 +22,11 @@ namespace Argumental
     /// </summary>
     public IReadOnlyList<string> Args { get; set; } = Array.Empty<string>();
 
-    public string Description { get; set; }
+    public ICommand HelpCommand { get; private set; }
+
+    public ICommand VersionCommand { get; private set; }
+
+    IConfigurationBuilder IConfigurationBuilderSource.ConfigurationBuilder { get; set; }
 
     public Parser GetParser()
     {
@@ -34,26 +38,24 @@ namespace Argumental
       return new ConfigurationBuilder().AddCommandPipeline(this).Build();
     }
 
-    public TResult Run()
+    public TResult Invoke()
     {
-      return Run(Build());
+      return Invoke(Build());
     }
 
-    public TResult Run(IConfigurationRoot configuration)
+    public TResult Invoke(IConfigurationRoot configuration)
     {
       var parser = configuration.Providers.OfType<Parser>().FirstOrDefault();
       if (parser == null || !(parser.Command is Command<TResult> command))
         throw new InvalidOperationException("Command pipeline was not added to the configuration builder.");
-      if (command.Handler == null)
-        throw new InvalidOperationException("Command does not have a handler.");
       if (parser.UnrecognizedTokens.Count > 0 && !command.AllowUnrecognizedTokens)
-        throw new CommandException("Unexpected options were included on the command line: " + string.Join(", ", parser.UnrecognizedTokens)
-          , this, command, null);
-      return command.Handler.Invoke(command, configuration);
+        throw new ConfigurationException(this, command, null);
+      return command.Invoke(configuration);
     }
     
     IConfigurationProvider IConfigurationSource.Build(IConfigurationBuilder builder)
     {
+      ((IConfigurationBuilderSource)this).ConfigurationBuilder = builder;
       return GetParser();
     }
 
@@ -83,37 +85,30 @@ namespace Argumental
       return this;
     }
 
-    public CommandPipeline<TResult> AddDescription(string description)
+    public CommandPipeline<TResult> AddHelpCommand(string name = null)
     {
-      Description = description;
-      return this;
-    }
-
-    public CommandPipeline<TResult> AddOptionComparer(IEqualityComparer<string> optionComparer)
-    {
-      _optionComparer = optionComparer;
-      return this;
-    }
-
-    public static CommandPipeline<TResult> Default()
-    {
-      var result = new CommandPipeline<TResult>();
-      var helpAliases = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "?", "h", "help" };
-      var helpCommand = new Command<TResult>("help")
+      name = string.IsNullOrEmpty(name) ? "help" : name;
+      SwitchMappings.Add("-?", "--" + name);
+      SwitchMappings.Add("-" + name.Substring(0, 1), "--" + name);
+      var helpCommand = new Command<TResult>(name)
       {
         AllowUnrecognizedTokens = true,
         Matcher = context =>
         {
+          var switches = new HashSet<string>(_optionComparer) { name };
+          switches.UnionWith(SwitchMappings
+            .Where(k => _optionComparer.Equals(k.Value, "--" + name))
+            .Select(k => k.Key.TrimStart('-', '/')));
           if (context.Tokens.Count > 0
             && context.Tokens[0].Type != TokenType.Key
-            && string.Equals(context.Tokens[0].Value, "help", StringComparison.OrdinalIgnoreCase))
+            && string.Equals(context.Tokens[0].Value, name, StringComparison.OrdinalIgnoreCase))
           {
             context.Success = true;
           }
           else
           {
             var idx = context.Tokens
-              .FindIndex(t => t.Type == TokenType.Key && helpAliases.Contains(t.Value));
+              .FindIndex(t => t.Type == TokenType.Key && switches.Contains(t.Value));
             if (idx >= 0)
             {
               context.Success = true;
@@ -124,7 +119,7 @@ namespace Argumental
                 command = context.Tokens[0];
               }
               context.Tokens.Clear();
-              context.Tokens.Add(new Token(TokenType.Value, "help"));
+              context.Tokens.Add(new Token(TokenType.Value, name));
               if (!string.IsNullOrEmpty(command.Value))
                 context.Tokens.Add(command);
             }
@@ -139,18 +134,29 @@ namespace Argumental
         if (commandNameOpt.TryGet(config, null, out var commandName)
           && !string.IsNullOrEmpty(commandName))
         {
-          command = result.Commands.FirstOrDefault(c => string.Equals(c.Name.ToString(), commandName, StringComparison.OrdinalIgnoreCase));
+          command = Commands.FirstOrDefault(c => string.Equals(c.Name.ToString(), commandName, StringComparison.OrdinalIgnoreCase));
         }
-        throw new CommandException("Help requested.", result, command, null);
-      };
-      result.AddCommand(helpCommand);
+        throw new ConfigurationException(this, command, null);
+      }; 
+      HelpCommand = helpCommand;
+      return this;
+    }
 
-      var versionCommand = new Command<TResult>("version")
+    public CommandPipeline<TResult> AddOptionComparer(IEqualityComparer<string> optionComparer)
+    {
+      _optionComparer = optionComparer;
+      return this;
+    }
+
+    public CommandPipeline<TResult> AddVersionCommand(string name = null)
+    {
+      name = name ?? "version";
+      var versionCommand = new Command<TResult>(name)
       {
         AllowUnrecognizedTokens = true,
         Matcher = context =>
         {
-          if (context.Tokens.Any(t => t.Type == TokenType.Key && string.Equals(t.Value, "version", StringComparison.OrdinalIgnoreCase)))
+          if (context.Tokens.Any(t => t.Type == TokenType.Key && _optionComparer.Equals(t.Value, name)))
           {
             context.Success = true;
             context.Tokens.Clear();
@@ -161,7 +167,15 @@ namespace Argumental
           throw new VersionException("Version requested.");
         }
       };
-      return result.AddCommand(versionCommand);
+      VersionCommand = versionCommand;
+      return this;
+    }
+
+    public static CommandPipeline<TResult> Default()
+    {
+      return new CommandPipeline<TResult>()
+        .AddHelpCommand()
+        .AddVersionCommand();
     }
   }
 }

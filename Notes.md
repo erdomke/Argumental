@@ -1,0 +1,2 @@
+- How to handle an Option\<T\> where T is a list or dictionary?
+- Handle a binding from a set of options to another type

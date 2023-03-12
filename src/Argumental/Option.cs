@@ -19,7 +19,7 @@ namespace Argumental
 
     public bool IsPositional { get; }
 
-    public Type Type => typeof(T);
+    public IDataType Type { get; }
 
     public IEnumerable<ValidationAttribute> Validations => _validators;
 
@@ -34,16 +34,21 @@ namespace Argumental
       Path = new ConfigSection(name, description);
       IsPositional = isPositional;
 
-      var type = typeof(T);
-      if (!Reflection.IsConvertibleFromString(type))
+      if (Reflection.TryGetDataType(typeof(T), out var dataType)
+        && dataType.IsConvertibleFromString)
       {
-        var stringConstructor = type.GetConstructors().FirstOrDefault(c =>
+        Type = dataType;
+      }
+      else
+      {
+        var stringConstructor = typeof(T).GetConstructors().FirstOrDefault(c =>
         {
           var args = c.GetParameters();
           return args.Length == 1 && args[0].ParameterType == typeof(string);
         });
         if (stringConstructor == null)
-          throw new InvalidOperationException($"Cannot have an option of type {type.FullName}");
+          throw new InvalidOperationException($"Cannot have an option of type {typeof(T).FullName}");
+        Type = new StringType(typeof(T));
         _converter = s => (T)stringConstructor.Invoke(new object[] { s });
       }
     }

@@ -22,7 +22,7 @@ namespace Argumental
         BuildPropertyList(new Property()
         {
           Path = _parents,
-          Type = typeof(T)
+          Type = new ObjectType(typeof(T))
         }, result);
         return result;
       }
@@ -35,23 +35,24 @@ namespace Argumental
 
     private void BuildPropertyList(IProperty property, List<IProperty> properties)
     {
-      if (Reflection.IsConvertibleFromString(property.Type))
+      if (property.Type.IsConvertibleFromString)
       {
         properties.Add(property);
       }
-      else if (Reflection.TryGetListType(property.Type, out var elementType))
+      else if (property.Type is ArrayType arrayType)
       {
-        properties.Add(property);
+        if (arrayType.ValueType.IsConvertibleFromString)
+          properties.Add(property);
         BuildPropertyList(new Property()
         {
           Path = new ConfigPath(property.Path)
           {
             new AnyListIndex()
           },
-          Type = elementType
+          Type = arrayType.ValueType
         }, properties);
       }
-      else if (Reflection.TryGetDictionaryType(property.Type, out var _, out elementType))
+      else if (property.Type is DictionaryType dictionaryType)
       {
         properties.Add(property);
         BuildPropertyList(new Property()
@@ -60,15 +61,19 @@ namespace Argumental
           {
             new AnyDictKey()
           },
-          Type = elementType
+          Type = dictionaryType.ValueType
         }, properties);
       }
-      else
+      else if (property.Type is ObjectType objectType)
       {
-        foreach (var prop in typeof(T).GetAllProperties())
+        foreach (var prop in objectType.GetAllProperties())
         {
           BuildPropertyList(GetProperty(property.Path, prop), properties);
         }
+      }
+      else
+      {
+        throw new InvalidOperationException($"Invalid type {property.Type.GetType().Name}");
       }
     }
 
@@ -83,6 +88,9 @@ namespace Argumental
       var dataFormat = property.GetCustomAttribute<DataTypeAttribute>();
       var defaultValue = property.GetCustomAttribute<DefaultValueAttribute>();
 
+      if (!Reflection.TryGetDataType(property.PropertyType, out var dataType))
+        dataType = new ObjectType(property.PropertyType);
+
       return new Property
       {
         Path = new ConfigPath(parents)
@@ -95,10 +103,11 @@ namespace Argumental
         DefaultValue = defaultValue?.Value,
         MaskValue = property.PropertyType == typeof(SecureString)
           || password?.Password == true
-          || dataFormat?.DataType == DataType.Password,
+          || dataFormat?.DataType == DataType.Password
+          || dataFormat?.DataType == DataType.CreditCard,
         Hidden = browsable?.Browsable == false
           || editorBrowsable?.State == EditorBrowsableState.Never,
-        Type = property.PropertyType,
+        Type = dataType,
         Validations = property.GetCustomAttributes().OfType<ValidationAttribute>().ToList()
       };
     }
@@ -127,7 +136,7 @@ namespace Argumental
 
       public bool IsPositional => false;
 
-      public Type Type { get; set; }
+      public IDataType Type { get; set; }
 
       public IEnumerable<ValidationAttribute> Validations { get; set; } = Array.Empty<ValidationAttribute>();
 
@@ -136,6 +145,53 @@ namespace Argumental
       public bool MaskValue { get; set; }
 
       public object DefaultValue { get; set; }
+    }
+
+    private class ObjectType : IDataType
+    {
+      public Type Type { get; }
+
+      public bool IsConvertibleFromString => false;
+
+      public ObjectType(Type type)
+      {
+        Type = type;
+      }
+
+      public bool TryGetExample(IProperty property, out object example)
+      {
+        throw new NotImplementedException();
+      }
+
+      public IEnumerable<PropertyInfo> GetAllProperties()
+      {
+        var baseType = Type;
+        while (baseType != typeof(object))
+        {
+          var properties = baseType.GetProperties(BindingFlags.Public
+            | BindingFlags.NonPublic
+            | BindingFlags.Instance
+            | BindingFlags.Static
+            | BindingFlags.DeclaredOnly
+          );
+
+          foreach (var property in properties)
+          {
+            // if the property is virtual, only add the base-most definition so
+            // overridden properties aren't duplicated in the list.
+            var setMethod = property.GetSetMethod(true);
+
+            if (setMethod is null
+              || !setMethod.IsVirtual
+              || setMethod == setMethod.GetBaseDefinition())
+            {
+              yield return property;
+            }
+          }
+
+          baseType = baseType.BaseType;
+        }
+      }
     }
   }
 }

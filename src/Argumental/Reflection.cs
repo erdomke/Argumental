@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
-using System.Reflection;
+using System.Numerics;
 
 namespace Argumental
 {
@@ -18,40 +18,42 @@ namespace Argumental
       }
     }
 
-    public static bool IsConvertibleFromString(this Type type)
+    public static bool TryGetDataType(Type type, out IDataType dataType)
     {
-      // The configuration binder has hard-coded support for base64.
-      if (type == typeof(object)
-        || type == typeof(string)
-        || type == typeof(byte[]))
-        return true;
-
-      if (type.IsGenericType
-        && type.GetGenericTypeDefinition() == typeof(Nullable<>))
-        return IsConvertibleFromString(Nullable.GetUnderlyingType(type));
-
-      var converter = TypeDescriptor.GetConverter(type);
-      return converter.CanConvertFrom(typeof(string));
+      return TryGetDataType(type, null, out dataType);
     }
 
-    public static bool TryGetListType(Type type, out Type elementType)
+    private static bool TryGetDataType(Type type, Type nullableType, out IDataType dataType)
     {
-      if (type == typeof(string))
-      {
-        elementType = default;
-        return false;
-      }
-      else if (type.IsArray)
-      {
-        elementType = type.GetElementType();
-        return true;
-      }
+      dataType = null;
+      if (type == typeof(object))
+        dataType = new AnyType();
+      else if (type == typeof(bool))
+        dataType = new BooleanType(nullableType ?? type);
+      else if (type == typeof(string) || type.IsEnum)
+        dataType = new StringType(nullableType ?? type);
+      else if (type == typeof(byte)
+        || type == typeof(sbyte)
+        || type == typeof(short)
+        || type == typeof(ushort)
+        || type == typeof(int)
+        || type == typeof(uint)
+        || type == typeof(long)
+        || type == typeof(ulong)
+        || type == typeof(BigInteger)
+        || type == typeof(float)
+        || type == typeof(double)
+        || type == typeof(decimal))
+        dataType = new NumberType(nullableType ?? type);
+      else if (type.IsArray && TryGetDataType(type.GetElementType(), null, out IDataType arrayElement))
+        dataType = new ArrayType(type, arrayElement);
+      else if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>))
+        return TryGetDataType(Nullable.GetUnderlyingType(type), type, out dataType);
       else
       {
-        elementType = default;
         var interfaces = (IEnumerable<Type>)type.GetInterfaces();
         if (type.IsInterface)
-          interfaces = new[] { type }.Concat(interfaces); 
+          interfaces = new[] { type }.Concat(interfaces);
         foreach (var iface in interfaces)
         {
           if (iface.IsGenericType)
@@ -60,69 +62,28 @@ namespace Argumental
             if (defn == typeof(IDictionary<,>)
               || defn == typeof(IReadOnlyDictionary<,>))
             {
-              return false;
+              var args = iface.GetGenericArguments();
+              if (!TryGetDataType(args[0], null, out IDataType keyType)
+                || !TryGetDataType(args[1], null, out IDataType valueType))
+                return false;
+              dataType = new DictionaryType(type, keyType, valueType);
+              return true;
             }
             else if (defn == typeof(IEnumerable<>))
             {
-              elementType = type.GetGenericArguments()[0];
+              if (!TryGetDataType(type.GetGenericArguments()[0], null, out IDataType enumElement))
+                return false;
+              dataType = new ArrayType(type, enumElement);
+              return true;
             }
           }
         }
-        return elementType != default;
+
+        var converter = TypeDescriptor.GetConverter(type);
+        if (converter.CanConvertFrom(typeof(string)))
+          dataType = new StringType(nullableType ?? type);
       }
-    }
-
-    public static bool TryGetDictionaryType(Type type, out Type keyType, out Type valueType)
-    {
-      var interfaces = type.GetInterfaces();
-      foreach (var iface in interfaces)
-      {
-        if (iface.IsGenericType)
-        {
-          var defn = iface.GetGenericTypeDefinition();
-          if (defn == typeof(IDictionary<,>)
-            || defn == typeof(IReadOnlyDictionary<,>))
-          {
-            var args = iface.GetGenericArguments();
-            keyType = args[0];
-            valueType = args[1];
-            return true;
-          }
-        }
-      }
-      keyType = default;
-      valueType = default;
-      return false;
-    }
-
-    public static IEnumerable<PropertyInfo> GetAllProperties(this Type type)
-    {
-      var baseType = type;
-      while (baseType != typeof(object))
-      {
-        var properties = baseType.GetProperties(BindingFlags.Public
-          | BindingFlags.NonPublic
-          | BindingFlags.Instance
-          | BindingFlags.Static
-          | BindingFlags.DeclaredOnly
-        );
-
-        foreach (var property in properties)
-        {
-          // if the property is virtual, only add the base-most definition so
-          // overridden properties aren't duplicated in the list.
-          var setMethod = property.GetSetMethod(true);
-
-          if (setMethod is null
-            || !setMethod.IsVirtual
-            || setMethod == setMethod.GetBaseDefinition())
-          {
-            yield return property;
-          }
-        }
-
-        baseType = baseType.BaseType;
-      }
+      return dataType != null;
     }
   }
 }

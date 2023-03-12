@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Configuration;
+using System.Reflection;
 
 namespace Argumental.TestConsole
 {
@@ -6,6 +7,9 @@ namespace Argumental.TestConsole
   {
     static int Main(string[] args)
     {
+      var assembly = Assembly.GetEntryAssembly() ?? Assembly.GetCallingAssembly();
+      var version = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>();
+
       return CommandApp.Default()
         .Run(CommandPipeline<int>.Default()
           .AddArgs(args)

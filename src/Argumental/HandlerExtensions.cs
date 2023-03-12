@@ -21,7 +21,7 @@ namespace Argumental
           success = false;
       }
       if (!success)
-        throw new CommandException(string.Join("\r\n", validations.Select(v => v.ErrorMessage)), null, handler as ICommand, validations);
+        throw new ConfigurationException(null, handler as ICommand, validations.Select(v => v.ErrorMessage));
       return results;
     }
 
@@ -46,6 +46,32 @@ namespace Argumental
     {
       config.Providers.Add(option1);
       config.Providers.Add(option2);
+      config.Handler = (_, c) => DynamicInvoke(c, config, handler);
+    }
+
+    public static void SetHandler<T1, T2, T3, TResult>(this IConfigHandler<TResult> config
+      , Func<T1, T2, T3, TResult> handler
+      , IOptionProvider<T1> option1
+      , IOptionProvider<T2> option2
+      , IOptionProvider<T3> option3)
+    {
+      config.Providers.Add(option1);
+      config.Providers.Add(option2);
+      config.Providers.Add(option3);
+      config.Handler = (_, c) => DynamicInvoke(c, config, handler);
+    }
+
+    public static void SetHandler<T1, T2, T3, T4, TResult>(this IConfigHandler<TResult> config
+      , Func<T1, T2, T3, T4, TResult> handler
+      , IOptionProvider<T1> option1
+      , IOptionProvider<T2> option2
+      , IOptionProvider<T3> option3
+      , IOptionProvider<T4> option4)
+    {
+      config.Providers.Add(option1);
+      config.Providers.Add(option2);
+      config.Providers.Add(option3);
+      config.Providers.Add(option4);
       config.Handler = (_, c) => DynamicInvoke(c, config, handler);
     }
 

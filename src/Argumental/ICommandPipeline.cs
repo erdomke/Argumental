@@ -10,13 +10,15 @@ namespace Argumental
     /// </summary>
     IReadOnlyList<string> Args { get; }
 
-    IEnumerable<ICommand> Commands { get; }
+    IReadOnlyList<ICommand> Commands { get; }
 
-    string Description { get; }
+    ICommand HelpCommand { get; }
 
     /// <summary>
     /// Gets or sets the switch mappings.
     /// </summary>
     IDictionary<string, string> SwitchMappings { get; }
+
+    ICommand VersionCommand { get; }
   }
 }

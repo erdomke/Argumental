@@ -1,4 +1,6 @@
 ﻿using Microsoft.Extensions.Configuration;
+using System.ComponentModel.DataAnnotations;
+using System.Linq;
 
 namespace Argumental
 {
@@ -8,6 +10,11 @@ namespace Argumental
     {
       configurationBuilder.Add(commandPipeline);
       return configurationBuilder;
+    }
+
+    public static bool IsRequired(this IProperty property)
+    {
+      return property.Validations.OfType<RequiredAttribute>().Any();
     }
   }
 }

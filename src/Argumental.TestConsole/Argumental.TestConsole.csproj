@@ -5,6 +5,11 @@
     <TargetFramework>net6.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <Title>A useful title</Title>
+    <Authors>The Authors</Authors>
+    <Company>The Company</Company>
+    <Description>A description</Description>
+    <Copyright>(c) 2000</Copyright>
   </PropertyGroup>
 
   <ItemGroup>

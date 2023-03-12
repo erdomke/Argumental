@@ -11,7 +11,7 @@ namespace Argumental
     bool IsPositional { get; }
     bool MaskValue { get; }
     ConfigPath Path { get; }
-    Type Type { get; }
+    IDataType Type { get; }
     IEnumerable<ValidationAttribute> Validations { get; }
   }
 }

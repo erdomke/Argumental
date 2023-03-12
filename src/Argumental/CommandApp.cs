@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Extensions.Configuration;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
@@ -7,31 +8,53 @@ namespace Argumental
 {
   public class CommandApp
   {
-    private Dictionary<Type, ExceptionHandler> _handlers = new Dictionary<Type, ExceptionHandler>();
+    private readonly Dictionary<Type, ExceptionHandler> _handlers = new Dictionary<Type, ExceptionHandler>();
+    private Func<IConfigurationBuilder, ConfigFormatRepository> _repositoryFactory;
+    private IConfigurationBuilderSource _builderSource;
 
-    public CommandApp AddHandler<T>(int? exitCode, Action<T> handler) where T : Exception
+    public AssemblyMetadata Metadata { get; }
+
+    public CommandApp(AssemblyMetadata metadata)
+    {
+      Metadata = metadata;
+    }
+
+    public CommandApp AddHandler<T>(int? exitCode, Action<T, CommandApp> handler) where T : Exception
     {
       _handlers[typeof(T)] = new ExceptionHandler(exitCode, handler);
       return this;
     }
 
-    public CommandApp AddHandler<T>(ExitCode exitCode, Action<T> handler) where T : Exception
+    public CommandApp AddHandler<T>(ExitCode exitCode, Action<T, CommandApp> handler) where T : Exception
     {
       _handlers[typeof(T)] = new ExceptionHandler((int)exitCode, handler);
       return this;
     }
 
+    public CommandApp SetConfigFormat(Func<IConfigurationBuilder, ConfigFormatRepository> repositoryFactory)
+    {
+      _repositoryFactory = repositoryFactory;
+      return this;
+    }
+
+    public ConfigFormatRepository GetConfigFormat()
+    {
+      return (_repositoryFactory ?? ConfigFormatRepository.Default).Invoke(_builderSource.ConfigurationBuilder);
+    }
+
     public int Run<T>(CommandPipeline<T> pipeline)
     {
+      _builderSource = pipeline;
       return RunAsync(() => {
-        pipeline.Run();
+        pipeline.Invoke();
         return Task.FromResult(Environment.ExitCode);
       }).Result;
     }
 
     public int Run(CommandPipeline<int> pipeline)
     {
-      return Run(pipeline.Run);
+      _builderSource = pipeline;
+      return Run(pipeline.Invoke);
     }
 
     public int Run(Func<int> callback)
@@ -49,12 +72,14 @@ namespace Argumental
 
     public Task<int> RunAsync<T>(CommandPipeline<Task<T>> pipeline)
     {
-      return RunAsync(pipeline.Run);
+      _builderSource = pipeline;
+      return RunAsync(pipeline.Invoke);
     }
 
     public Task<int> RunAsync(CommandPipeline<Task<int>> pipeline)
     {
-      return RunAsync(pipeline.Run);
+      _builderSource = pipeline;
+      return RunAsync(pipeline.Invoke);
     }
 
     public Task<int> RunAsync(Func<Task> callback)
@@ -84,7 +109,7 @@ namespace Argumental
             if (handler.Handler != null)
             {
               handled = true;
-              handler.Handler.DynamicInvoke(new[] { ex });
+              handler.Handler.DynamicInvoke(new object[] { ex, this });
             }
             if (exitCode.HasValue && handled)
               break;
@@ -99,21 +124,43 @@ namespace Argumental
 
     public static CommandApp Default()
     {
-      return Default(Console.Out);
+      var width = 80;
+      try
+      {
+        width = Console.WindowWidth;
+      }
+      catch (IOException) { }
+      return Default(new TextWrapper(Console.Out)
+      {
+        MaxWidth = width
+      });
     }
 
     public static CommandApp Default(TextWriter writer)
     {
-      return new CommandApp()
+      return new CommandApp(AssemblyMetadata.Default())
         .AddHandler<FileNotFoundException>(ExitCode.NoInput, null)
         .AddHandler<DirectoryNotFoundException>(ExitCode.NoInput, null)
         .AddHandler<IOException>(ExitCode.IoError, null)
         .AddHandler<UnauthorizedAccessException>(ExitCode.NoPermissions, null)
-        .AddHandler<CommandException>(ExitCode.UsageError, null)
-        .AddHandler<Exception>(ExitCode.Failure, e =>
+        .AddHandler<VersionException>(ExitCode.UsageError, (e, a) =>
+        {
+          writer.WriteLine(a.Metadata.Version);
+        })
+        .AddHandler<ConfigurationException>(ExitCode.UsageError, (e, a) =>
+        {
+          a.GetConfigFormat().WriteError(writer, a.Metadata, e);
+        })
+        .AddHandler<Exception>(ExitCode.Failure, (e, _) =>
         {
           writer.WriteLine(e.ToString());
         });
+    }
+
+    public CommandApp SetMetadata(Action<AssemblyMetadata> callback)
+    {
+      callback(Metadata);
+      return this;
     }
 
     private struct ExceptionHandler

@@ -5,6 +5,10 @@ using System.Linq;
 
 namespace Argumental
 {
+  /// <summary>
+  /// A command that operates on the configuration and produces a result.
+  /// </summary>
+  /// <typeparam name="TResult">The type of result produced by invoking the command.</typeparam>
   public class Command<TResult> : IConfigHandler<TResult>, ICommand
   {
     public IList<IOptionProvider> Providers { get; } = new List<IOptionProvider>();
@@ -18,11 +22,19 @@ namespace Argumental
     public Action<ParseContext> Matcher { get; set; }
     public Func<IConfigHandler<TResult>, IConfigurationRoot, TResult> Handler { get; set; }
     public bool AllowUnrecognizedTokens { get; set; }
+    public bool Hidden { get; set; }
 
     public Command(string name = "", string description = null)
     {
       Name = new ConfigSection(name, description);
       Matcher = MatchByName;
+    }
+
+    public TResult Invoke(IConfigurationRoot configuration)
+    {
+      if (Handler == null)
+        throw new InvalidOperationException($"Command '{Name}' does not have a handler.");
+      return Handler.Invoke(this, configuration);
     }
 
     private void MatchByName(ParseContext context)
