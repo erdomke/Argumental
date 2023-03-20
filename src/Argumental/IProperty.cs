@@ -10,7 +10,7 @@ namespace Argumental
     bool Hidden { get; }
     bool IsPositional { get; }
     bool MaskValue { get; }
-    ConfigPath Path { get; }
+    ConfigPath Name { get; }
     IDataType Type { get; }
     IEnumerable<ValidationAttribute> Validations { get; }
   }

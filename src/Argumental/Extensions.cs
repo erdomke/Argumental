@@ -16,5 +16,11 @@ namespace Argumental
     {
       return property.Validations.OfType<RequiredAttribute>().Any();
     }
+
+    public static bool TryFindIndex(this string value, string substring, out int index)
+    {
+      index = value.IndexOf(substring);
+      return index >= 0;
+    }
   }
 }

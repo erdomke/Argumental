@@ -15,6 +15,11 @@ namespace Argumental
       _repository = repository;
     }
 
-    public abstract void WriteHelp(AssemblyMetadata metadata, IEnumerable<ISchemaProvider> schemas, IEnumerable<string> errors);
+    public abstract void Write(AssemblyMetadata metadata, IEnumerable<ISchemaProvider> schemas, IEnumerable<string> errors);
+
+    public virtual void Write(AssemblyMetadata metadata, ISchemaProvider schema, IEnumerable<string> errors)
+    {
+      Write(metadata, new[] {schema }, errors);
+    }
   }
 }

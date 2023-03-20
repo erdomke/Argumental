@@ -1,26 +1,21 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading;
 
 namespace Argumental.Help
 {
   public abstract class ManPageWriter : ConfigSchemaWriter
   {
-    public override void WriteHelp(AssemblyMetadata metadata, IEnumerable<ISchemaProvider> schemas, IEnumerable<string> errors)
+    public override void Write(AssemblyMetadata metadata, IEnumerable<ISchemaProvider> schemas, IEnumerable<string> errors)
     {
+      if (errors?.Any() == true)
+        WriteErrors(errors);
       var schemaList = schemas.ToList();
-      var commandlineFormat = _repository.Formats.OfType<CommandLineFormat>().FirstOrDefault();
       if (schemaList.Count == 1 
         && schemaList[0] is ICommand command
         && string.IsNullOrEmpty(command.Name.ToString()))
       {
-        WriteCommand(metadata
-          , command
-          , commandlineFormat?.HelpAliases ?? Enumerable.Empty<string>()
-          , commandlineFormat?.VersionAliases ?? Enumerable.Empty<string>()
-          , metadata.Description);
+        WriteCommand(metadata, command);
       }
       else
       {
@@ -35,11 +30,12 @@ namespace Argumental.Help
         WriteEndSection(SchemaSection.Synopsis);
         WriteEndSection(SchemaSection.Usage);
 
-        if (commandlineFormat?.HelpAliases.Any() == true
-          || commandlineFormat?.VersionAliases.Any() == true)
+        var options = _repository.GetProperties<CommandLineFormat>(Array.Empty<IProperty>()).ToList();
+        if (options.Count > 0)
         {
           WriteStartSection(SchemaSection.Options);
-          WriteCommonOptions(commandlineFormat?.HelpAliases, commandlineFormat?.VersionAliases);
+          foreach (var option in options)
+            WriteOption(option);
           WriteEndSection(SchemaSection.Options);
         }
 
@@ -48,72 +44,45 @@ namespace Argumental.Help
           WriteStartSection(SchemaSection.Commands);
           foreach (var cmd in schemaList.OfType<ICommand>())
           {
-            var aliases = new[] { cmd.Name }
-              .Select(name =>
-              {
-                var alias = new ConfigAlias(ConfigAliasType.Argument);
-                var first = true;
-                foreach (var part in name)
-                {
-                  if (first)
-                    first = false;
-                  else
-                    alias.Add(new ConfigAliasPart(" ", ConfigAliasType.Other));
-                  alias.Add(new ConfigAliasPart(part.ToString(), ConfigAliasType.Argument));
-                }
-                return alias;
-              });
-            WriteOption(aliases, (cmd.Name.Last() as ConfigSection)?.Description, null);
+            WriteOption(new[] { string.Join(" ", cmd.Name.Select(n => n.ToString())) }
+              , (cmd.Name.Last() as ConfigSection)?.Description
+              , null);
           }
           WriteEndSection(SchemaSection.Commands);
         }
       }
     }
 
-    private IEnumerable<IProperty> Options(IEnumerable<IProperty> properties)
+    public override void Write(AssemblyMetadata metadata, ISchemaProvider schema, IEnumerable<string> errors)
     {
-      return properties
-        .Where(p => p.Path.All(s => s is ConfigSection) && !p.Hidden)
-        .Select((p, i) => new { Property = p, Index = i })
-        .OrderBy(p => p.Property.IsPositional
-          ? p.Index
-          : (p.Property.IsRequired() ? -2 : -1))
-        .Select(p => p.Property);
+      if (errors?.Any() == true)
+        WriteErrors(errors);
+      WriteCommand(metadata, schema);
     }
 
-    public virtual void WriteCommand(AssemblyMetadata metadata, ICommand command
-      , IEnumerable<string> helpAliases
-      , IEnumerable<string> versionAliases
-      , string description = null)
-    {
-      if (description == null)
-      {
-        var name = command.Name.Last() as ConfigSection;
-        if (!string.IsNullOrEmpty(name?.Description))
-          description = name.Description;
-      }
+    protected virtual void WriteErrors(IEnumerable<string> errors) { }
 
+    public virtual void WriteCommand(AssemblyMetadata metadata, ISchemaProvider schema)
+    {
+      var description = ((schema as ICommand)?.Name.Last() as ConfigSection)?.Description
+        ?? metadata.Description;
       if (description != null)
         WriteDescription(description);
 
       WriteStartSection(SchemaSection.Usage);
-      WriteCommandSynopsis(metadata.Name, command.Name, command.Properties);
+      WriteCommandSynopsis(metadata.Name, (schema as ICommand)?.Name ?? new ConfigPath(), schema.Properties);
       WriteEndSection(SchemaSection.Usage);
 
-      WriteStartSection(SchemaSection.Options);
-      foreach (var property in Options(command.Properties).Where(p => !p.IsPositional))
-        WriteOption(property);
-      WriteCommonOptions(helpAliases, versionAliases);
-      WriteEndSection(SchemaSection.Options);
-    }
-
-    private void WriteCommonOptions(IEnumerable<string> helpAliases
-      , IEnumerable<string> versionAliases)
-    {
-      if (versionAliases?.Any() == true)
-        WriteOption(versionAliases.Select(a => new ConfigAlias(ConfigAliasType.Argument, a)), "Show version information", null);
-      if (helpAliases?.Any() == true)
-        WriteOption(helpAliases.Select(a => new ConfigAlias(ConfigAliasType.Argument, a)), "Show help and usage information", null);
+      var options = _repository.GetProperties<CommandLineFormat>(schema.Properties)
+        .Where(p => !p.Property.IsPositional)
+        .ToList();
+      if (options.Count > 0)
+      {
+        WriteStartSection(SchemaSection.Options);
+        foreach (var option in options)
+          WriteOption(option);
+        WriteEndSection(SchemaSection.Options);
+      }
     }
 
     public virtual void WriteCommandSynopsis(string application, ConfigPath command, IEnumerable<IProperty> properties)
@@ -124,16 +93,24 @@ namespace Argumental.Help
         .OfType<ConfigSection>()
         .Where(p => !string.IsNullOrEmpty(p.Name)))
         WriteArgument(part.Name, null);
-      var posixConventions = _repository.Formats.OfType<CommandLineFormat>().FirstOrDefault()?.PosixConventions == true;
-      foreach (var property in Options(properties))
+      foreach (var property in _repository.GetProperties<CommandLineFormat>(properties).Where(p => !p.IsGlobal))
       {
-        var prompt = property.Path.Last().ToString().Replace(' ', '-');
-        if (posixConventions && property.Type is BooleanType)
-          prompt = null;
-        WriteArgument(property.IsPositional ? null : "--" + property.Path.ToString()
+        var name = property.Aliases.First();
+        var prompt = default(string);
+        if (name.StartsWith("<"))
+        {
+          prompt = name.TrimStart('<').TrimEnd('>');
+          name = null;
+        }
+        else if (name.TryFindIndex(" <", out var idx))
+        {
+          prompt = name.Substring(idx + 1).TrimStart('<').TrimEnd('>');
+          name = name.Substring(0, idx);
+        }
+        WriteArgument(name
           , prompt
-          , property.IsRequired()
-          , property.Type is ArrayType);
+          , property.Property.IsRequired()
+          , property.Property.Type is ArrayType);
       }
       WriteEndSection(SchemaSection.Synopsis);
     }
@@ -144,12 +121,12 @@ namespace Argumental.Help
 
     public abstract void WriteArgument(string optionName, string prompt, bool? required = null, bool repeat = false);
 
-    public virtual void WriteOption(IProperty property)
+    public virtual void WriteOption(ConfigProperty property)
     {
-      WriteOption(_repository.GetAliases(property), (property.Path.Last() as ConfigSection)?.Description, property.DefaultValue);
+      WriteOption(property.Aliases, (property.Property.Name.Last() as ConfigSection)?.Description, property.Property.DefaultValue);
     }
 
-    public abstract void WriteOption(IEnumerable<ConfigAlias> aliases, string description, object defaultValue);
+    public abstract void WriteOption(IEnumerable<string> aliases, string description, object defaultValue);
 
     public abstract void WriteStartSection(SchemaSection section);
 

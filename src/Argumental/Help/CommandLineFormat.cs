@@ -1,19 +1,17 @@
-﻿using Argumental.Help;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 
 namespace Argumental
 {
   public class CommandLineFormat : IConfigFormat
   {
+    private readonly string _helpName;
+    private readonly string _versionName;
+
     public ILookup<string, string> AliasLookup { get; }
 
     public Func<IProperty, bool> Filter { get; set; }
-
-    public IEnumerable<string> HelpAliases { get; }
-    public IEnumerable<string> VersionAliases { get; }
 
     public bool PosixConventions { get; }
 
@@ -32,37 +30,40 @@ namespace Argumental
             , k => k.Key);
       }
 
-      if (string.IsNullOrEmpty(helpName))
-        HelpAliases = Enumerable.Empty<string>();
-      else
-        HelpAliases = new[] { "--" + helpName }.Concat(AliasLookup[helpName]).OrderBy(a => a.Length);
-
-      if (string.IsNullOrEmpty(versionName))
-        VersionAliases = Enumerable.Empty<string>();
-      else
-        VersionAliases = new[] { "--" + versionName }.Concat(AliasLookup[versionName]).OrderBy(a => a.Length);
-
+      _helpName = helpName;
+      _versionName = versionName;
+      
       PosixConventions = posixConventions;
     }
 
-    public IEnumerable<ConfigAlias> GetAliases(IProperty property)
+    public IEnumerable<ConfigProperty> GetProperties(IEnumerable<IProperty> properties)
     {
-      var fullName = property.Path.ToString();
-      return new[] { "--" + fullName }.Concat(AliasLookup[fullName])
-        .OrderBy(n => n.Length)
-        .Select(n =>
-        {
-          var alias = new ConfigAlias(ConfigAliasType.Argument)
-          {
-            new ConfigAliasPart(n, ConfigAliasType.Argument)
-          };
-          if (!(property.Type is BooleanType && PosixConventions))
-          {
-            alias.Add(new ConfigAliasPart(" ", ConfigAliasType.Other));
-            alias.Add(new ConfigAliasPart("<" + property.Path.Last().ToString() + ">", ConfigAliasType.Replaceable));
-          }
-          return alias;
-        });
+      var propList = new List<IProperty>();
+      if (PosixConventions)
+        propList.AddRange(properties.Where(p => !(p.Name.Last() is AnyListIndex)));
+      else
+        propList.AddRange(properties.Where(p => !(p.Type is ArrayType)));
+
+      var globalStart = propList.Count;
+      if (!string.IsNullOrEmpty(_versionName))
+        propList.Add(new Property(new ConfigPath(new ConfigSection(_versionName, "Show version information")), new BooleanType()));
+      if (!string.IsNullOrEmpty(_helpName))
+        propList.Add(new Property(new ConfigPath(new ConfigSection(_helpName, "Show help and usage information")), new BooleanType()));
+
+      for (var i = 0; i < propList.Count; i++)
+      {
+        var fullName = propList[i].Name.ToString();
+        if (propList[i].IsPositional)
+          yield return new ConfigProperty(new[] { $"<{propList[i].Name.Last().ToString().Replace(' ', '-')}>" }
+          , propList[i], i >= globalStart);
+        else
+          yield return new ConfigProperty(new[] { "--" + fullName }.Concat(AliasLookup[fullName])
+            .OrderBy(n => n.Length)
+            .Select(n => propList[i].Type is BooleanType && PosixConventions
+              ? n
+              : $"{n} <{propList[i].Name.Last().ToString().Replace(' ', '-')}>")
+            .ToList(), propList[i], i >= globalStart);
+      }
     }
   }
 }

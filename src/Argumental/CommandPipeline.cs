@@ -8,9 +8,10 @@ namespace Argumental
   public class CommandPipeline<TResult> : ICommandPipeline, IConfigurationBuilderSource
   {
     private readonly List<Command<TResult>> _commands = new List<Command<TResult>>();
-    private IEqualityComparer<string> _optionComparer = StringComparer.OrdinalIgnoreCase;
+    private readonly Parser _parser;
 
     public IReadOnlyList<ICommand> Commands => _commands;
+    public IEqualityComparer<string> OptionComparer { get; private set; } = StringComparer.OrdinalIgnoreCase;
 
     /// <summary>
     /// Gets or sets the switch mappings.
@@ -27,10 +28,15 @@ namespace Argumental
     public ICommand VersionCommand { get; private set; }
 
     IConfigurationBuilder IConfigurationBuilderSource.ConfigurationBuilder { get; set; }
+    
+    public CommandPipeline()
+    {
+      _parser = new Parser(this);
+    }
 
     public Parser GetParser()
     {
-      return new Parser(_optionComparer, this);
+      return _parser;
     }
 
     public IConfigurationRoot Build()
@@ -43,12 +49,11 @@ namespace Argumental
       return Invoke(Build());
     }
 
-    public TResult Invoke(IConfigurationRoot configuration)
+    public TResult Invoke(IConfiguration configuration)
     {
-      var parser = configuration.Providers.OfType<Parser>().FirstOrDefault();
-      if (parser == null || !(parser.Command is Command<TResult> command))
+      if (!(_parser.Command is Command<TResult> command))
         throw new InvalidOperationException("Command pipeline was not added to the configuration builder.");
-      if (parser.UnrecognizedTokens.Count > 0 && !command.AllowUnrecognizedTokens)
+      if (_parser.UnrecognizedTokens.Count > 0 && !command.AllowUnrecognizedTokens)
         throw new ConfigurationException(this, command, null);
       return command.Invoke(configuration);
     }
@@ -95,9 +100,9 @@ namespace Argumental
         AllowUnrecognizedTokens = true,
         Matcher = context =>
         {
-          var switches = new HashSet<string>(_optionComparer) { name };
+          var switches = new HashSet<string>(OptionComparer) { name };
           switches.UnionWith(SwitchMappings
-            .Where(k => _optionComparer.Equals(k.Value, "--" + name))
+            .Where(k => OptionComparer.Equals(k.Value, "--" + name))
             .Select(k => k.Key.TrimStart('-', '/')));
           if (context.Tokens.Count > 0
             && context.Tokens[0].Type != TokenType.Key
@@ -141,9 +146,9 @@ namespace Argumental
       return this;
     }
 
-    public CommandPipeline<TResult> AddOptionComparer(IEqualityComparer<string> optionComparer)
+    public CommandPipeline<TResult> SetOptionComparer(IEqualityComparer<string> optionComparer)
     {
-      _optionComparer = optionComparer;
+      OptionComparer = optionComparer;
       return this;
     }
 
@@ -155,7 +160,7 @@ namespace Argumental
         AllowUnrecognizedTokens = true,
         Matcher = context =>
         {
-          if (context.Tokens.Any(t => t.Type == TokenType.Key && _optionComparer.Equals(t.Value, name)))
+          if (context.Tokens.Any(t => t.Type == TokenType.Key && OptionComparer.Equals(t.Value, name)))
           {
             context.Success = true;
             context.Tokens.Clear();

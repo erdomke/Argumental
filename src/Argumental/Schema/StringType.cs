@@ -58,7 +58,7 @@ namespace Argumental
       else if (property.Validations.OfType<DataTypeAttribute>().Any(d => d.DataType == DataType.PhoneNumber))
         example = "+15555555555";
       else if (property.Validations.OfType<DataTypeAttribute>().Any(d => d.DataType == DataType.EmailAddress))
-        example = property.Path.OfType<ConfigSection>().Last().Name + "@example.com";
+        example = property.Name.OfType<ConfigSection>().Last().Name + "@example.com";
       else if (property.Validations.OfType<DataTypeAttribute>().Any(d => d.DataType == DataType.CreditCard))
         example = "5555555555555555";
       else
@@ -66,11 +66,11 @@ namespace Argumental
         var fileExtensions = property.Validations.OfType<FileExtensionsAttribute>().FirstOrDefault();
         if (fileExtensions != null)
         {
-          example = property.Path.OfType<ConfigSection>().Last().Name + "." + fileExtensions.Extensions.Split(',')[0].TrimStart('.');
+          example = property.Name.OfType<ConfigSection>().Last().Name + "." + fileExtensions.Extensions.Split(',')[0].TrimStart('.');
         }
         else
         {
-          example = property.Path.OfType<ConfigSection>().Last().Name;
+          example = property.Name.OfType<ConfigSection>().Last().Name;
           if (!Validator.TryValidateValue(example, new ValidationContext(this), null, property.Validations))
             return false;
         }

@@ -10,9 +10,9 @@ namespace Argumental
     public Type Type { get; }
 
 
-    public BooleanType(Type type)
+    public BooleanType(Type type = null)
     {
-      Type = type;
+      Type = type ?? typeof(bool);
     }
 
     public bool TryGetExample(IProperty property, out object example)

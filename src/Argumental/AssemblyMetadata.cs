@@ -1,7 +1,9 @@
 ﻿using System;
 using System.IO;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
+[assembly:InternalsVisibleTo("Argumental.Test")]
 namespace Argumental
 {
   public class AssemblyMetadata
@@ -35,7 +37,9 @@ namespace Argumental
       return this;
     }
 
-    public static AssemblyMetadata Default()
+    internal static Func<AssemblyMetadata> _defaultMetadata = DefaultImplementation;
+
+    private static AssemblyMetadata DefaultImplementation()
     {
       var assembly = Assembly.GetEntryAssembly() ?? Assembly.GetExecutingAssembly();
       var assemblyVersionAttribute = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>();
@@ -47,6 +51,11 @@ namespace Argumental
         .SetVersion(assemblyVersionAttribute == null
           ? assembly.GetName().Version?.ToString()
           : assemblyVersionAttribute.InformationalVersion);
+    }
+
+    public static AssemblyMetadata Default()
+    {
+      return _defaultMetadata();
     }
   }
 }

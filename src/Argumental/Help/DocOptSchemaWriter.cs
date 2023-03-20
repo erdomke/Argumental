@@ -6,15 +6,11 @@ namespace Argumental
 {
   public class DocOptSchemaWriter : ManPageWriter
   {
-    public override void WriteHelp(AssemblyMetadata metadata, IEnumerable<ISchemaProvider> schemas, IEnumerable<string> errors)
+    protected override void WriteErrors(IEnumerable<string> errors)
     {
-      if (errors.Any())
-      {
-        foreach (var error in errors)
-          _writer.WriteLine(error);
-        _writer.WriteLine();
-      }
-      base.WriteHelp(metadata, schemas, errors);
+      foreach (var error in errors)
+        _writer.WriteLine(error);
+      _writer.WriteLine();
     }
 
     public override void WriteApplication(string name)
@@ -81,11 +77,11 @@ namespace Argumental
       }
     }
 
-    public override void WriteOption(IEnumerable<ConfigAlias> aliases, string description, object defaultValue)
+    public override void WriteOption(IEnumerable<string> aliases, string description, object defaultValue)
     {
       _writer.WriteLine();
       var wrapper = _writer as TextWrapper;
-      _writer.Write(string.Join(", ", aliases.Select(a => a.ToString())));
+      _writer.Write(string.Join(", ", aliases));
       wrapper?.IncreaseIndent(new string(' ', 18));
       _writer.Write("  ");
       _writer.Write(description);

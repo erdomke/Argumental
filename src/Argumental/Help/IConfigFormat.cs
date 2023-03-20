@@ -6,8 +6,6 @@ namespace Argumental
 {
   public interface IConfigFormat
   {
-    Func<IProperty, bool> Filter { get; }
-
-    IEnumerable<ConfigAlias> GetAliases(IProperty property);
+    IEnumerable<ConfigProperty> GetProperties(IEnumerable<IProperty> properties);
   }
 }

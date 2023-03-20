@@ -6,17 +6,14 @@ namespace Argumental
 {
   public class Parser : ConfigurationProvider
   {
-    private readonly IEqualityComparer<string> _optionComparer;
-
     public ICommand Command { get; private set; }
 
     public ICommandPipeline Pipeline { get; }
 
     public List<string> UnrecognizedTokens { get; } = new List<string>();
 
-    internal Parser(IEqualityComparer<string> optionComparer, ICommandPipeline pipeline)
+    internal Parser(ICommandPipeline pipeline)
     {
-      _optionComparer = optionComparer;
       Pipeline = pipeline;
     }
 
@@ -27,7 +24,7 @@ namespace Argumental
 
     public Dictionary<string, string> Parse()
     {
-      var data = new Dictionary<string, string>(_optionComparer);
+      var data = new Dictionary<string, string>(Pipeline.OptionComparer);
       var tokens = Tokenize();
       var allCommands = new List<ICommand>();
       if (Pipeline.HelpCommand != null)
@@ -72,7 +69,7 @@ namespace Argumental
           else if (prop.Type is ArrayType)
           {
             var listIdx = i;
-            var propKeyPrefix = prop.Path.ToString() + ":";
+            var propKeyPrefix = prop.Name.ToString() + ":";
             while (listIdx < tokens.Count && tokens[listIdx].Type == TokenType.Value)
             {
               data[propKeyPrefix + (listIdx - i)] = tokens[listIdx].Value;
@@ -82,14 +79,14 @@ namespace Argumental
           }
           else
           {
-            data[prop.Path.ToString()] = tokens[i].Value;
+            data[prop.Name.ToString()] = tokens[i].Value;
           }
           position++;
         }
         else // Key
         {
           var propName = tokens[i].Value;
-          var prop = properties.FirstOrDefault(p => _optionComparer.Equals(p.Path.ToString(), propName));
+          var prop = properties.FirstOrDefault(p => Pipeline.OptionComparer.Equals(p.Name.ToString(), propName));
           if (i + 1 < tokens.Count && tokens[i + 1].Type == TokenType.Value)
           {
             if (prop != null && prop.Type is ArrayType)

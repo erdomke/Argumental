@@ -3,33 +3,32 @@
   [TestClass]
   public class SystemCommandLine
   {
-    private class BasicApp
+    private static Func<AssemblyMetadata> _origMetadata;
+
+    [AssemblyInitialize]
+    public static void Initialize(TestContext context)
     {
-      public static Task<int> Main1(string[] args)
+      _origMetadata = AssemblyMetadata._defaultMetadata;
+      AssemblyMetadata._defaultMetadata = () =>
       {
-        return CommandApp.Default()
-          .SetMetadata(m => m.SetName("scl")
-            .SetDescription("Sample app for Argumental")
-            .SetVersion("1.0.0"))
-          .RunAsync(CommandPipeline<Task<int>>.Default()
-            .AddArgs(args)
-            .AddCommand("", c =>
-            {
-              c.SetHandler((file) =>
-              {
-                Console.WriteLine("Read file: " + file);
-                return Task.FromResult(0);
-              }, new Option<string>("file", "The file to read and display on the console."));
-            }));
-      }
+        return new AssemblyMetadata().SetName("scl")
+          .SetDescription("Sample app for Argumental")
+          .SetVersion("1.0.0");
+      };
     }
 
+    [AssemblyCleanup]
+    public static void Cleanup()
+    {
+      AssemblyMetadata._defaultMetadata = _origMetadata;
+    }
+    
     [TestMethod]
     public async Task Basic()
     {
-      var result = await CommandResult.RunAsync(new[] { "--file", "something.txt" }, BasicApp.Main1);
+      var result = await CommandResult.RunAsync(new[] { "--file", "something.txt" }, BasicApp.Program.Main_);
       Assert.AreEqual("Read file: something.txt", result.Out.ToString()?.TrimEnd());
-      result = await CommandResult.RunAsync(new[] { "--help" }, BasicApp.Main1);
+      result = await CommandResult.RunAsync(new[] { "--help" }, BasicApp.Program.Main_);
       Assert.AreEqual(@"Sample app for Argumental
 
 Usage:
@@ -39,43 +38,15 @@ Options:
   --file <file>     The file to read and display on the console.
   --version         Show version information
   -?, -h, --help    Show help and usage information", result.Out.ToString()?.TrimEnd());
-      result = await CommandResult.RunAsync(new[] { "--version" }, BasicApp.Main1);
+      result = await CommandResult.RunAsync(new[] { "--version" }, BasicApp.Program.Main_);
       Assert.AreEqual(@"1.0.0", result.Out.ToString()?.TrimEnd());
     }
 
-    private class SubcommandApp
-    {
-      public static Task<int> Main1(string[] args)
-      {
-        return CommandApp.Default()
-          .SetMetadata(m => m.SetName("scl")
-            .SetDescription("Sample app for Argumental")
-            .SetVersion("1.0.0"))
-          .RunAsync(CommandPipeline<Task<int>>.Default()
-            .AddArgs(args)
-            .AddCommand("read", c =>
-            {
-              ((ConfigSection)c.Name.Last()).Description = "Read and display the file.";
-              c.SetHandler((file, delay, fgcolor, lightMode) =>
-              {
-                Console.WriteLine($"{file}, {delay}, {fgcolor}, {lightMode}");
-                return Task.FromResult(0);
-              }, new Option<string>("file", "The file to read and display on the console.")
-              , new Option<int>("delay", "Delay between lines, specified as milliseconds per character in a line.")
-              {
-                DefaultValue = 42
-              }, new Option<ConsoleColor>("fgcolor", "Foreground color of text displayed on the console.")
-              {
-                DefaultValue = ConsoleColor.White
-              }, new Option<bool>("light-mode", "Background color of text displayed on the console: default is black, light mode is white."));
-            }));
-      }
-    }
-
+    
     [TestMethod]
     public async Task Subcommand()
     {
-      var result = await CommandResult.RunAsync(new[] { "--file", "sampleQuotes.txt" }, SubcommandApp.Main1);
+      var result = await CommandResult.RunAsync(new[] { "--file", "sampleQuotes.txt" }, SubcommandApp.Program.Main_);
       Assert.AreEqual(@"Required command was not provided.
 
 Sample app for Argumental
@@ -89,20 +60,50 @@ Options:
 
 Commands:
   read              Read and display the file.", result.Out.ToString()?.TrimEnd());
-//      result = await CommandResult.RunAsync(new[] { "read", "-h" }, SubcommandApp.Main1);
-//      Assert.AreEqual(@"Required command was not provided.
+      result = await CommandResult.RunAsync(new[] { "read", "-h" }, SubcommandApp.Program.Main_);
+      Assert.AreEqual(@"Read and display the file.
 
-//Sample app for Argumental
+Usage:
+  scl read [--delay <delay>] [--fgcolor <fgcolor>] [--file <file>]
+    [--light-mode]
 
-//Usage:
-//  scl [command] [options]
+Options:
+  --delay <delay>   Delay between lines, specified as milliseconds per character
+                    in a line. [default: 42]
+  --fgcolor <fgcolor>  Foreground color of text displayed on the console.
+                    [default: White]
+  --file <file>     The file to read and display on the console.
+  --light-mode      Background color of text displayed on the console: default
+                    is black, light mode is white. [default: False]
+  --version         Show version information
+  -?, -h, --help    Show help and usage information", result.Out.ToString()?.TrimEnd());
+      result = await CommandResult.RunAsync(new[] { "read", "--file", "sampleQuotes.txt" }, SubcommandApp.Program.Main_);
+      Assert.AreEqual(@"sampleQuotes.txt, 42, White, False", result.Out.ToString()?.TrimEnd());
+      result = await CommandResult.RunAsync(new[] { "read", "--file", "sampleQuotes.txt", "--delay", "0" }, SubcommandApp.Program.Main_);
+      Assert.AreEqual(@"sampleQuotes.txt, 0, White, False", result.Out.ToString()?.TrimEnd());
+      result = await CommandResult.RunAsync(new[] { "read", "--file", "sampleQuotes.txt", "--fgcolor", "red", "--light-mode" }, SubcommandApp.Program.Main_);
+      Assert.AreEqual(@"sampleQuotes.txt, 42, Red, True", result.Out.ToString()?.TrimEnd());
+      result = await CommandResult.RunAsync(new[] { "read", "--file", "sampleQuotes.txt", "--delay", "forty-two" }, SubcommandApp.Program.Main_);
+      Assert.AreEqual(@"Failed to convert configuration value at 'delay' to type 'System.Int32'.
+forty-two is not a valid value for Int32. (Parameter 'value') Input string was
+not in a correct format.
 
-//Options:
-//  --version         Show version information
-//  -?, -h, --help    Show help and usage information
+Read and display the file.
 
-//Commands:
-//  read              Read and display the file.", result.Out.ToString()?.TrimEnd());
+Usage:
+  scl read [--delay <delay>] [--fgcolor <fgcolor>] [--file <file>]
+    [--light-mode]
+
+Options:
+  --delay <delay>   Delay between lines, specified as milliseconds per character
+                    in a line. [default: 42]
+  --fgcolor <fgcolor>  Foreground color of text displayed on the console.
+                    [default: White]
+  --file <file>     The file to read and display on the console.
+  --light-mode      Background color of text displayed on the console: default
+                    is black, light mode is white. [default: False]
+  --version         Show version information
+  -?, -h, --help    Show help and usage information", result.Out.ToString()?.TrimEnd());
     }
   }
 }

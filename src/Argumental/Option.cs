@@ -1,12 +1,7 @@
 ﻿using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
-using System.IO;
-using System.Linq;
-using System.Reflection;
-using System.Security;
 
 namespace Argumental
 {
@@ -18,7 +13,7 @@ namespace Argumental
 
     public T DefaultValue { get; set; }
 
-    public ConfigPath Path { get; }
+    public ConfigPath Name { get; }
 
     public bool Hidden { get; set; }
 
@@ -52,7 +47,7 @@ namespace Argumental
 
     public Option(params ConfigSection[] parents)
     {
-      Path = new ConfigPath(parents);
+      Name = new ConfigPath(parents);
       if (Reflection.TryGetDataType(typeof(T), out var dataType))
         _type = dataType;
       else
@@ -69,32 +64,30 @@ namespace Argumental
       {
         if (arrayType.ValueType.IsConvertibleFromString)
           properties.Add(property);
-        BuildPropertyList(new Property()
-        {
-          Path = new ConfigPath(property.Path)
+        BuildPropertyList(new Property(
+          new ConfigPath(property.Name)
           {
             new AnyListIndex()
-          },
-          Type = arrayType.ValueType
-        }, properties);
+          }
+          , arrayType.ValueType
+        ), properties);
       }
       else if (property.Type is DictionaryType dictionaryType)
       {
         properties.Add(property);
-        BuildPropertyList(new Property()
-        {
-          Path = new ConfigPath(property.Path)
-          {
-            new AnyDictKey()
-          },
-          Type = dictionaryType.ValueType
-        }, properties);
+        BuildPropertyList(new Property(
+          new ConfigPath(property.Name) 
+          { 
+            new AnyDictKey() 
+          }
+        , dictionaryType.ValueType
+        ), properties);
       }
       else if (property.Type is ObjectType objectType)
       {
         foreach (var prop in objectType.GetAllProperties())
         {
-          BuildPropertyList(GetProperty(property.Path, prop), properties);
+          BuildPropertyList(new Property(property.Name, prop), properties);
         }
       }
       else
@@ -103,53 +96,40 @@ namespace Argumental
       }
     }
 
-    public IProperty GetProperty(IEnumerable<IConfigSection> parents, PropertyInfo property)
-    {
-      var configKey = property.GetCustomAttribute<ConfigurationKeyNameAttribute>();
-      var displayAttr = property.GetCustomAttribute<DisplayAttribute>();
-      var descripAttr = property.GetCustomAttribute<DescriptionAttribute>();
-      var browsable = property.GetCustomAttribute<BrowsableAttribute>();
-      var editorBrowsable = property.GetCustomAttribute<EditorBrowsableAttribute>();
-      var password = property.GetCustomAttribute<PasswordPropertyTextAttribute>();
-      var dataFormat = property.GetCustomAttribute<DataTypeAttribute>();
-      var defaultValue = property.GetCustomAttribute<DefaultValueAttribute>();
-
-      if (!Reflection.TryGetDataType(property.PropertyType, out var dataType))
-        dataType = new ObjectType(property.PropertyType);
-
-      return new Property
-      {
-        Path = new ConfigPath(parents)
-        {
-          new ConfigSection(configKey?.Name ?? property.Name)
-          {
-            Description = displayAttr?.Description ?? descripAttr?.Description
-          }
-        },
-        DefaultValue = defaultValue?.Value,
-        MaskValue = property.PropertyType == typeof(SecureString)
-          || password?.Password == true
-          || dataFormat?.DataType == DataType.Password
-          || dataFormat?.DataType == DataType.CreditCard,
-        Hidden = browsable?.Browsable == false
-          || editorBrowsable?.State == EditorBrowsableState.Never,
-        Type = dataType,
-        Validations = property.GetCustomAttributes().OfType<ValidationAttribute>().ToList()
-      };
-    }
-
     public bool TryGet(IConfiguration configuration, List<ValidationResult> validationResults, out T value)
     {
       if (_type.IsConvertibleFromString)
       {
-        value = configuration.GetValue(Path.ToString(), DefaultValue);
-        return Validator.TryValidateValue(value, new ValidationContext(this), validationResults, Validations);
+        try
+        {
+          value = configuration.GetValue(Name.ToString(), DefaultValue);
+          return Validator.TryValidateValue(value, new ValidationContext(this)
+          {
+            MemberName = Name.ToString(),
+          }, validationResults, Validations);
+        }
+        catch (InvalidOperationException ex)
+        {
+          if (validationResults != null)
+          {
+            var messages = new List<string>();
+            var curr = (Exception)ex;
+            while (curr != null)
+            {
+              messages.Add(curr.Message);
+              curr = curr.InnerException;
+            }
+            validationResults.Add(new ValidationResult(string.Join(" ", messages), new[] { Name.ToString() }));
+          }
+          value = default;
+          return false;
+        }
       }
       else
       {
         var config = configuration;
-        if (Path?.Count > 0)
-          config = config.GetSection(Path.ToString());
+        if (Name?.Count > 0)
+          config = config.GetSection(Name.ToString());
         value = config.Get<T>();
         if (value == null)
           value = Activator.CreateInstance<T>();
@@ -162,70 +142,6 @@ namespace Argumental
       var result = TryGet(configuration, validationResults, out var typed);
       value = typed;
       return result;
-    }
-
-    private class Property : IProperty
-    {
-      public ConfigPath Path { get; set; }
-
-      public bool IsPositional => false;
-
-      public IDataType Type { get; set; }
-
-      public IEnumerable<ValidationAttribute> Validations { get; set; } = Array.Empty<ValidationAttribute>();
-
-      public bool Hidden { get; set;}
-
-      public bool MaskValue { get; set; }
-
-      public object DefaultValue { get; set; }
-    }
-
-    private class ObjectType : IDataType
-    {
-      public Type Type { get; }
-
-      public bool IsConvertibleFromString => false;
-
-      public ObjectType(Type type)
-      {
-        Type = type;
-      }
-
-      public bool TryGetExample(IProperty property, out object example)
-      {
-        throw new NotImplementedException();
-      }
-
-      public IEnumerable<PropertyInfo> GetAllProperties()
-      {
-        var baseType = Type;
-        while (baseType != typeof(object))
-        {
-          var properties = baseType.GetProperties(BindingFlags.Public
-            | BindingFlags.NonPublic
-            | BindingFlags.Instance
-            | BindingFlags.Static
-            | BindingFlags.DeclaredOnly
-          );
-
-          foreach (var property in properties)
-          {
-            // if the property is virtual, only add the base-most definition so
-            // overridden properties aren't duplicated in the list.
-            var setMethod = property.GetSetMethod(true);
-
-            if (setMethod is null
-              || !setMethod.IsVirtual
-              || setMethod == setMethod.GetBaseDefinition())
-            {
-              yield return property;
-            }
-          }
-
-          baseType = baseType.BaseType;
-        }
-      }
     }
   }
 }
