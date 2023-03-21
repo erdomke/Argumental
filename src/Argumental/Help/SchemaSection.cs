@@ -7,6 +7,7 @@ namespace Argumental
     Usage,
     Synopsis,
     Options,
-    Commands
+    Commands,
+    Environment
   }
 }

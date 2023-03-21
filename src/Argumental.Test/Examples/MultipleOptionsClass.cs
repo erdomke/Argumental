@@ -26,7 +26,7 @@ namespace MultipleOptionsClass
     public static int Main_(string[] args)
     {
       return CommandApp.Default()
-        .Run(CommandPipeline<int>.Default()
+        .Run(app => CommandPipeline<int>.Default()
           .AddArgs(args)
           .AddAlias("-r", "--read")
           .AddCommand("", c =>
@@ -38,8 +38,9 @@ namespace MultipleOptionsClass
               Console.Write(o.Offset.HasValue ? o.Offset.Value.ToString() + ", " : "null, ");
               Console.Write(string.Join(", ", o.InputFiles));
               return 0;
-            }, new Option<Options>());
-          }));
+            }, new OptionGroup<Options>());
+          })
+          .Invoke());
     }
   }
 }

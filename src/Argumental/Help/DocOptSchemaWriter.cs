@@ -57,6 +57,7 @@ namespace Argumental
       if (_writer is TextWrapper wrapper
         && (section == SchemaSection.Usage
           || section == SchemaSection.Options
+          || section == SchemaSection.Environment
           || section == SchemaSection.Commands
           || section == SchemaSection.Synopsis))
       {
@@ -69,6 +70,7 @@ namespace Argumental
       _writer.WriteLine();
       if (section == SchemaSection.Usage
         || section == SchemaSection.Options
+        || section == SchemaSection.Environment
         || section == SchemaSection.Commands)
       {
         _writer.Write(section.ToString() + ":");

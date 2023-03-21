@@ -83,6 +83,17 @@ namespace Argumental.Help
           WriteOption(option);
         WriteEndSection(SchemaSection.Options);
       }
+
+      var envVars = _repository.GetProperties<EnvironmentVariableFormat>(schema.Properties)
+        .Where(p => p.Property.Type.IsConvertibleFromString)
+        .ToList();
+      if (envVars.Count > 0)
+      {
+        WriteStartSection(SchemaSection.Environment);
+        foreach (var envVar in envVars)
+          WriteOption(envVar);
+        WriteEndSection(SchemaSection.Environment);
+      }
     }
 
     public virtual void WriteCommandSynopsis(string application, ConfigPath command, IEnumerable<IProperty> properties)
@@ -123,7 +134,7 @@ namespace Argumental.Help
 
     public virtual void WriteOption(ConfigProperty property)
     {
-      WriteOption(property.Aliases, (property.Property.Name.Last() as ConfigSection)?.Description, property.Property.DefaultValue);
+      WriteOption(property.Aliases, property.Property.Name.OfType<ConfigSection>().LastOrDefault()?.Description, property.Property.DefaultValue);
     }
 
     public abstract void WriteOption(IEnumerable<string> aliases, string description, object defaultValue);

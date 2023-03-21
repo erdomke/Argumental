@@ -14,7 +14,7 @@ namespace SimpleOptionsClass
     public static int Main_(string[] args)
     {
       return CommandApp.Default()
-        .Run(CommandPipeline<int>.Default()
+        .Run(app => app.Register(CommandPipeline<int>.Default())
           .AddArgs(args)
           .AddCommand("", c =>
           {
@@ -25,8 +25,9 @@ namespace SimpleOptionsClass
               else
                 Console.WriteLine("Normal output.");
               return 0;
-            }, new Option<Options>());
-          }));
+            }, new OptionGroup<Options>());
+          })
+          .Invoke());
     }
   }
 }

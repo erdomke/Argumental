@@ -7,7 +7,7 @@ namespace SubcommandApp
     public static Task<int> Main_(string[] args)
     {
       return CommandApp.Default()
-        .RunAsync(CommandPipeline<Task<int>>.Default()
+        .RunAsync(app => app.Register(CommandPipeline<Task<int>>.Default())
           .AddArgs(args)
           .AddCommand("read", c =>
           {
@@ -24,7 +24,8 @@ namespace SubcommandApp
             {
               DefaultValue = ConsoleColor.White
             }, new Option<bool>("light-mode", "Background color of text displayed on the console: default is black, light mode is white."));
-          }));
+          })
+          .Invoke());
     }
   }
 

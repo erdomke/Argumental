@@ -26,7 +26,7 @@ namespace Argumental
       get
       {
         var result = new List<IProperty>();
-        BuildPropertyList(this, result);
+        Property.BuildPropertyList(this, result);
         return result;
       }
     }
@@ -51,97 +51,48 @@ namespace Argumental
       if (Reflection.TryGetDataType(typeof(T), out var dataType))
         _type = dataType;
       else
-        _type = new ObjectType(typeof(T));
+        throw new NotSupportedException("Use an OptionGroup for complex options");
     }
 
-    private void BuildPropertyList(IProperty property, List<IProperty> properties)
+    public T Get(InvocationContext context)
     {
-      if (property.Type.IsConvertibleFromString)
-      {
-        properties.Add(property);
-      }
-      else if (property.Type is ArrayType arrayType)
-      {
-        if (arrayType.ValueType.IsConvertibleFromString)
-          properties.Add(property);
-        BuildPropertyList(new Property(
-          new ConfigPath(property.Name)
-          {
-            new AnyListIndex()
-          }
-          , arrayType.ValueType
-        ), properties);
-      }
-      else if (property.Type is DictionaryType dictionaryType)
-      {
-        properties.Add(property);
-        BuildPropertyList(new Property(
-          new ConfigPath(property.Name) 
-          { 
-            new AnyDictKey() 
-          }
-        , dictionaryType.ValueType
-        ), properties);
-      }
-      else if (property.Type is ObjectType objectType)
-      {
-        foreach (var prop in objectType.GetAllProperties())
-        {
-          BuildPropertyList(new Property(property.Name, prop), properties);
-        }
-      }
-      else
-      {
-        throw new InvalidOperationException($"Invalid type {property.Type.GetType().Name}");
-      }
-    }
-
-    public bool TryGet(IConfiguration configuration, List<ValidationResult> validationResults, out T value)
-    {
+      var validationResults = new List<ValidationResult>();
       if (_type.IsConvertibleFromString)
       {
         try
         {
-          value = configuration.GetValue(Name.ToString(), DefaultValue);
-          return Validator.TryValidateValue(value, new ValidationContext(this)
+          
+          var value = context.Configuration.GetValue(Name.ToString(), DefaultValue);
+          if (!Validator.TryValidateValue(value, new ValidationContext(this)
           {
             MemberName = Name.ToString(),
-          }, validationResults, Validations);
+          }, validationResults, Validations))
+            context.AddErrors(validationResults);
+          return value;
         }
         catch (InvalidOperationException ex)
         {
-          if (validationResults != null)
-          {
-            var messages = new List<string>();
-            var curr = (Exception)ex;
-            while (curr != null)
-            {
-              messages.Add(curr.Message);
-              curr = curr.InnerException;
-            }
-            validationResults.Add(new ValidationResult(string.Join(" ", messages), new[] { Name.ToString() }));
-          }
-          value = default;
-          return false;
+          context.AddError(ex);
+          return default;
         }
       }
       else
       {
-        var config = configuration;
+        var config = context.Configuration;
         if (Name?.Count > 0)
           config = config.GetSection(Name.ToString());
-        value = config.Get<T>();
+        var value = config.Get<T>();
         if (value == null)
           value = Activator.CreateInstance<T>();
-        return Validator.TryValidateObject(value, new ValidationContext(value), validationResults, true);
+        if (!Validator.TryValidateObject(value, new ValidationContext(value), validationResults, true))
+          context.AddErrors(validationResults);
+        return value;
       }
     }
 
-    bool IOptionProvider.TryGet(IConfiguration configuration, List<ValidationResult> validationResults, out object value)
+    object IOptionProvider.Get(InvocationContext context)
     {
-      var result = TryGet(configuration, validationResults, out var typed);
-      value = typed;
-      return result;
+      return Get(context);
     }
   }
 }

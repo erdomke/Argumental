@@ -1,4 +1,6 @@
 ﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -6,17 +8,18 @@ using System.Threading.Tasks;
 
 namespace Argumental
 {
-  public class CommandApp
+  public class CommandApp : IServiceProvider
   {
-    private readonly Dictionary<Type, ExceptionHandler> _handlers = new Dictionary<Type, ExceptionHandler>();
-    private Func<IConfigurationBuilder, ConfigFormatRepository> _repositoryFactory;
-    private IConfigurationBuilderSource _builderSource;
-
-    public AssemblyMetadata Metadata { get; }
+    private readonly Dictionary<Type, ExceptionHandler> _handlers 
+      = new Dictionary<Type, ExceptionHandler>();
+    private readonly Dictionary<Type, Func<IServiceProvider, object>> _services
+      = new Dictionary<Type, Func<IServiceProvider, object>>();
 
     public CommandApp(AssemblyMetadata metadata)
     {
-      Metadata = metadata;
+      Register(metadata);
+      Register(s => ConfigFormatRepository.Default(s.GetService<IConfigurationBuilder>()));
+      Register(s => s.GetService<ICommandPipeline>()?.ConfigurationBuilder);
     }
 
     public CommandApp AddHandler<T>(int? exitCode, Action<T, CommandApp> handler) where T : Exception
@@ -30,72 +33,52 @@ namespace Argumental
       _handlers[typeof(T)] = new ExceptionHandler((int)exitCode, handler);
       return this;
     }
-
-    public CommandApp SetConfigFormat(Func<IConfigurationBuilder, ConfigFormatRepository> repositoryFactory)
+        
+    public CommandApp Register<T>(Func<IServiceProvider, T> factory) where T : class
     {
-      _repositoryFactory = repositoryFactory;
+      _services[typeof(T)] = factory;
       return this;
     }
 
-    public ConfigFormatRepository GetConfigFormat()
+    public CommandApp Register<T>(T instance) where T : class
     {
-      return (_repositoryFactory ?? ConfigFormatRepository.Default).Invoke(_builderSource.ConfigurationBuilder);
+      return Register(_ => instance);
     }
 
-    public int Run<T>(CommandPipeline<T> pipeline)
+    public CommandPipeline<T> Register<T>(CommandPipeline<T> pipeline)
     {
-      _builderSource = pipeline;
-      return RunAsync(() => {
-        pipeline.Invoke();
-        return Task.FromResult(Environment.ExitCode);
-      }).Result;
+      Register<ICommandPipeline>(pipeline);
+      return pipeline;
     }
 
-    public int Run(CommandPipeline<int> pipeline)
+    public int Run(Action<CommandApp> callback)
     {
-      _builderSource = pipeline;
-      return Run(pipeline.Invoke);
-    }
-
-    public int Run(Func<int> callback)
-    {
-      return RunAsync(() => Task.FromResult(callback())).Result;
-    }
-
-    public int Run(Action callback)
-    {
-      return RunAsync(() => {
-        callback();
-        return Task.FromResult(Environment.ExitCode);
-      }).Result;
-    }
-
-    public Task<int> RunAsync<T>(CommandPipeline<Task<T>> pipeline)
-    {
-      _builderSource = pipeline;
-      return RunAsync(pipeline.Invoke);
-    }
-
-    public Task<int> RunAsync(CommandPipeline<Task<int>> pipeline)
-    {
-      _builderSource = pipeline;
-      return RunAsync(pipeline.Invoke);
-    }
-
-    public Task<int> RunAsync(Func<Task> callback)
-    {
-      return RunAsync(async () =>
+      return RunAsync(app =>
       {
-        await callback().ConfigureAwait(false);
+        callback(app);
+        return Task.FromResult(Environment.ExitCode);
+      }).Result;
+    }
+
+    public int Run(Func<CommandApp, int> callback)
+    {
+      return RunAsync(app => Task.FromResult(callback(app))).Result;
+    }
+
+    public Task<int> RunAsync(Func<CommandApp, Task> callback)
+    {
+      return RunAsync(async app =>
+      {
+        await callback(app).ConfigureAwait(false);
         return Environment.ExitCode;
       });
     }
 
-    public async Task<int> RunAsync(Func<Task<int>> callback)
+    public async Task<int> RunAsync(Func<CommandApp, Task<int>> callback)
     {
       try
       {
-        Environment.ExitCode = await callback().ConfigureAwait(false);
+        Environment.ExitCode = await callback(this).ConfigureAwait(false);
       }
       catch (Exception ex)
       {
@@ -145,11 +128,24 @@ namespace Argumental
         .AddHandler<UnauthorizedAccessException>(ExitCode.NoPermissions, null)
         .AddHandler<VersionException>(ExitCode.UsageError, (e, a) =>
         {
-          writer.WriteLine(a.Metadata.Version);
+          writer.WriteLine(a.GetService<AssemblyMetadata>().Version);
         })
         .AddHandler<ConfigurationException>(ExitCode.UsageError, (e, a) =>
         {
-          a.GetConfigFormat().WriteError(writer, a.Metadata, e);
+          if (e.Pipeline != null)
+            a.Register(e.Pipeline);
+          if (e.ConfigurationBuilder != null)
+            a.Register(e.ConfigurationBuilder);
+          a.GetService<ConfigFormatRepository>().WriteError(writer, a.GetService<AssemblyMetadata>(), e);
+        })
+        .AddHandler<OptionsValidationException>(ExitCode.UsageError, (e, a) =>
+        {
+          var pipeline = a.GetService<ICommandPipeline>();
+          var configEx = new ConfigurationException(pipeline?.GetParser().Command, e.Failures)
+          {
+            Pipeline = pipeline
+          };
+          a.GetService<ConfigFormatRepository>().WriteError(writer, a.GetService<AssemblyMetadata>(), configEx);
         })
         .AddHandler<Exception>(ExitCode.Failure, (e, _) =>
         {
@@ -157,10 +153,12 @@ namespace Argumental
         });
     }
 
-    public CommandApp SetMetadata(Action<AssemblyMetadata> callback)
+    public object GetService(Type serviceType)
     {
-      callback(Metadata);
-      return this;
+      if (_services.TryGetValue(serviceType, out var factory))
+        return factory(this);
+      else
+        return null;
     }
 
     private struct ExceptionHandler

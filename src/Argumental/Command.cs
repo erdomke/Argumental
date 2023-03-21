@@ -20,7 +20,7 @@ namespace Argumental
     }
     public IEnumerable<IProperty> Properties => Providers.SelectMany(p => p.Properties);
     public Action<ParseContext> Matcher { get; set; }
-    public Func<IConfigHandler<TResult>, IConfiguration, TResult> Handler { get; set; }
+    public Func<InvocationContext, TResult> Handler { get; set; }
     public bool AllowUnrecognizedTokens { get; set; }
     public bool Hidden { get; set; }
 
@@ -30,11 +30,11 @@ namespace Argumental
       Matcher = MatchByName;
     }
 
-    public TResult Invoke(IConfiguration configuration)
+    public TResult Invoke(IConfiguration configuration, IServiceProvider serviceProvider)
     {
       if (Handler == null)
         throw new InvalidOperationException($"Command '{Name}' does not have a handler.");
-      return Handler.Invoke(this, configuration);
+      return Handler.Invoke(new InvocationContext(this, configuration, serviceProvider));
     }
 
     private void MatchByName(ParseContext context)

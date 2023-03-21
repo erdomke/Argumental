@@ -48,7 +48,7 @@ namespace Argumental
 
       if (Command == null)
       {
-        throw new ConfigurationException(Pipeline, null, new[] { "Required command was not provided." });
+        throw new ConfigurationException(null, new[] { "Required command was not provided." });
       }
 
       var properties = Command.Properties.ToList();

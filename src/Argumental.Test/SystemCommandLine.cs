@@ -84,9 +84,9 @@ Options:
       result = await CommandResult.RunAsync(new[] { "read", "--file", "sampleQuotes.txt", "--fgcolor", "red", "--light-mode" }, SubcommandApp.Program.Main_);
       Assert.AreEqual(@"sampleQuotes.txt, 42, Red, True", result.Out.ToString()?.TrimEnd());
       result = await CommandResult.RunAsync(new[] { "read", "--file", "sampleQuotes.txt", "--delay", "forty-two" }, SubcommandApp.Program.Main_);
-      Assert.AreEqual(@"Failed to convert configuration value at 'delay' to type 'System.Int32'.
-forty-two is not a valid value for Int32. (Parameter 'value') Input string was
-not in a correct format.
+      Assert.AreEqual(@"Failed to convert configuration value at 'delay' to type 'System.Int32'. ->
+forty-two is not a valid value for Int32. (Parameter 'value') -> Input string
+was not in a correct format.
 
 Read and display the file.
 

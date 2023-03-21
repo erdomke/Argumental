@@ -6,11 +6,11 @@ namespace Argumental
 {
   public interface IOptionProvider : ISchemaProvider
   {
-    bool TryGet(IConfiguration configuration, List<ValidationResult> validationResults, out object value);
+    object Get(InvocationContext context);
   }
 
   public interface IOptionProvider<TOption> : IOptionProvider
   {
-    bool TryGet(IConfiguration configuration, List<ValidationResult> validationResults, out TOption value);
+    new TOption Get(InvocationContext context);
   }
 }

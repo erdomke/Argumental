@@ -5,12 +5,13 @@ using System.Linq;
 
 namespace Argumental
 {
-  public class CommandPipeline<TResult> : ICommandPipeline, IConfigurationBuilderSource
+  public class CommandPipeline<TResult> : ICommandPipeline
   {
     private readonly List<Command<TResult>> _commands = new List<Command<TResult>>();
     private readonly Parser _parser;
 
     public IReadOnlyList<ICommand> Commands => _commands;
+    public IConfigurationBuilder ConfigurationBuilder { get; private set; }
     public IEqualityComparer<string> OptionComparer { get; private set; } = StringComparer.OrdinalIgnoreCase;
 
     /// <summary>
@@ -27,7 +28,6 @@ namespace Argumental
 
     public ICommand VersionCommand { get; private set; }
 
-    IConfigurationBuilder IConfigurationBuilderSource.ConfigurationBuilder { get; set; }
     
     public CommandPipeline()
     {
@@ -41,26 +41,51 @@ namespace Argumental
 
     public IConfigurationRoot Build()
     {
-      return new ConfigurationBuilder().AddCommandPipeline(this).Build();
+      return Build(null);
+    }
+
+    public IConfigurationRoot Build(Action<IConfigurationBuilder> callback)
+    {
+      try
+      {
+        var builder = new ConfigurationBuilder();
+        callback?.Invoke(builder);
+        return builder.AddCommandPipeline(this).Build();
+      }
+      catch (ConfigurationException ex)
+      {
+        ex.Pipeline = this;
+        ex.ConfigurationBuilder = ConfigurationBuilder;
+        throw;
+      }
     }
 
     public TResult Invoke()
     {
-      return Invoke(Build());
+      return Invoke(Build(), null);
     }
 
-    public TResult Invoke(IConfiguration configuration)
+    public TResult Invoke(IConfiguration configuration, IServiceProvider serviceProvider)
     {
-      if (!(_parser.Command is Command<TResult> command))
-        throw new InvalidOperationException("Command pipeline was not added to the configuration builder.");
-      if (_parser.UnrecognizedTokens.Count > 0 && !command.AllowUnrecognizedTokens)
-        throw new ConfigurationException(this, command, null);
-      return command.Invoke(configuration);
+      try
+      {
+        if (!(_parser.Command is Command<TResult> command))
+          throw new InvalidOperationException("Command pipeline was not added to the configuration builder.");
+        if (_parser.UnrecognizedTokens.Count > 0 && !command.AllowUnrecognizedTokens)
+          throw new ConfigurationException(command, null);
+        return command.Invoke(configuration, serviceProvider);
+      }
+      catch (ConfigurationException ex)
+      {
+        ex.Pipeline = this;
+        ex.ConfigurationBuilder = ConfigurationBuilder;
+        throw;
+      }
     }
     
     IConfigurationProvider IConfigurationSource.Build(IConfigurationBuilder builder)
     {
-      ((IConfigurationBuilderSource)this).ConfigurationBuilder = builder;
+      ConfigurationBuilder = builder;
       return GetParser();
     }
 
@@ -124,23 +149,21 @@ namespace Argumental
       };
       var commandNameOpt = new Option<List<string>>("command", isPositional: true);
       helpCommand.Providers.Add(commandNameOpt);
-      helpCommand.Handler = (_, config) =>
+      helpCommand.Handler = (ctx) =>
       {
         var command = default(ICommand);
-        if (commandNameOpt.TryGet(config, null, out var commandNames))
+        var commandNames = commandNameOpt.Get(ctx);
+        foreach (var cmd in Commands)
         {
-          foreach (var cmd in Commands)
+          var context = new ParseContext(commandNames.Select(n => new Token(TokenType.Value, n)));
+          cmd.Matcher?.Invoke(context);
+          if (context.Success)
           {
-            var context = new ParseContext(commandNames.Select(n => new Token(TokenType.Value, n)));
-            cmd.Matcher?.Invoke(context);
-            if (context.Success)
-            {
-              command = cmd;
-              break;
-            }
+            command = cmd;
+            break;
           }
         }
-        throw new ConfigurationException(this, command, null);
+        throw new ConfigurationException(command, null);
       }; 
       HelpCommand = helpCommand;
       return this;
@@ -166,7 +189,7 @@ namespace Argumental
             context.Tokens.Clear();
           }
         },
-        Handler = (_, config) =>
+        Handler = (_) =>
         {
           throw new VersionException("Version requested.");
         }

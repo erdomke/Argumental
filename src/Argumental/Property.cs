@@ -63,5 +63,47 @@ namespace Argumental
       Type = dataType;
       Validations = property.GetCustomAttributes().OfType<ValidationAttribute>().ToList();
     }
+
+    internal static void BuildPropertyList(IProperty property, List<IProperty> properties)
+    {
+      if (property.Type.IsConvertibleFromString)
+      {
+        properties.Add(property);
+      }
+      else if (property.Type is ArrayType arrayType)
+      {
+        if (arrayType.ValueType.IsConvertibleFromString)
+          properties.Add(property);
+        BuildPropertyList(new Property(
+          new ConfigPath(property.Name)
+          {
+            new AnyListIndex()
+          }
+          , arrayType.ValueType
+        ), properties);
+      }
+      else if (property.Type is DictionaryType dictionaryType)
+      {
+        properties.Add(property);
+        BuildPropertyList(new Property(
+          new ConfigPath(property.Name)
+          {
+            new AnyDictKey()
+          }
+        , dictionaryType.ValueType
+        ), properties);
+      }
+      else if (property.Type is ObjectType objectType)
+      {
+        foreach (var prop in objectType.GetAllProperties())
+        {
+          BuildPropertyList(new Property(property.Name, prop), properties);
+        }
+      }
+      else
+      {
+        throw new InvalidOperationException($"Invalid type {property.Type.GetType().Name}");
+      }
+    }
   }
 }

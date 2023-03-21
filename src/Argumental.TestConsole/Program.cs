@@ -11,7 +11,7 @@ namespace Argumental.TestConsole
       var version = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>();
 
       return CommandApp.Default()
-        .Run(CommandPipeline<int>.Default()
+        .Run(app => app.Register(CommandPipeline<int>.Default())
           .AddArgs(args)
           .AddCommand("", c =>
           {
@@ -19,7 +19,8 @@ namespace Argumental.TestConsole
             {
               return 0;
             }, new Option<ConfigTest>());
-          }));
+          })
+          .Invoke());
     }
 
     private class ConfigTest

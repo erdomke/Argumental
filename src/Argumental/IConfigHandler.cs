@@ -1,12 +1,15 @@
-﻿using Microsoft.Extensions.Configuration;
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace Argumental
 {
-  public interface IConfigHandler<TResult>
+  public interface IConfigHandler
   {
     IList<IOptionProvider> Providers { get; }
-    Func<IConfigHandler<TResult>, IConfiguration, TResult> Handler { get; set; }
+  }
+
+  public interface IConfigHandler<TResult> : IConfigHandler
+  {
+    Func<InvocationContext, TResult> Handler { get; set; }
   }
 }

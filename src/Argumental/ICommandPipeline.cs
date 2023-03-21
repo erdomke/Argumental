@@ -12,6 +12,8 @@ namespace Argumental
 
     IReadOnlyList<ICommand> Commands { get; }
 
+    IConfigurationBuilder ConfigurationBuilder { get; }
+
     ICommand HelpCommand { get; }
 
     IEqualityComparer<string> OptionComparer { get; }
@@ -22,5 +24,7 @@ namespace Argumental
     IDictionary<string, string> SwitchMappings { get; }
 
     ICommand VersionCommand { get; }
+
+    Parser GetParser();
   }
 }
