@@ -32,6 +32,16 @@ namespace Argumental
       Validations = Array.Empty<ValidationAttribute>();
     }
 
+    public Property(ConfigPath newName, IProperty clone)
+    {
+      DefaultValue = clone.DefaultValue;
+      Hidden = clone.Hidden;
+      MaskValue = clone.MaskValue;
+      Name = newName;
+      Type = clone.Type;
+      Validations = clone.Validations;
+    }
+
     public Property(IEnumerable<IConfigSection> parents, PropertyInfo property)
     {
       var configKey = property.GetCustomAttribute<ConfigurationKeyNameAttribute>();
@@ -64,45 +74,62 @@ namespace Argumental
       Validations = property.GetCustomAttributes().OfType<ValidationAttribute>().ToList();
     }
 
-    internal static void BuildPropertyList(IProperty property, List<IProperty> properties)
+    internal static void FlattenList(IEnumerable<IConfigSection> path
+      , IEnumerable<IProperty> properties
+      , bool allowSimpleLists
+      , List<IProperty> result)
     {
-      if (property.Type.IsConvertibleFromString)
+      foreach (var property in properties)
       {
-        properties.Add(property);
-      }
-      else if (property.Type is ArrayType arrayType)
-      {
-        if (arrayType.ValueType.IsConvertibleFromString)
-          properties.Add(property);
-        BuildPropertyList(new Property(
-          new ConfigPath(property.Name)
-          {
-            new AnyListIndex()
-          }
-          , arrayType.ValueType
-        ), properties);
-      }
-      else if (property.Type is DictionaryType dictionaryType)
-      {
-        properties.Add(property);
-        BuildPropertyList(new Property(
-          new ConfigPath(property.Name)
-          {
-            new AnyDictKey()
-          }
-        , dictionaryType.ValueType
-        ), properties);
-      }
-      else if (property.Type is ObjectType objectType)
-      {
-        foreach (var prop in objectType.GetAllProperties())
+        if (property.Type.IsConvertibleFromString
+          || (property.Type is ArrayType simpleList
+            && simpleList.ValueType.IsConvertibleFromString
+            && allowSimpleLists))
         {
-          BuildPropertyList(new Property(property.Name, prop), properties);
+          result.Add(path.Any()
+            ? new Property(new ConfigPath(path.Concat(property.Name)), property)
+            : property);
         }
-      }
-      else
-      {
-        throw new InvalidOperationException($"Invalid type {property.Type.GetType().Name}");
+        else if (property.Type is ObjectType objectType)
+        {
+          FlattenList(new ConfigPath(path.Concat(property.Name)), objectType.Properties, allowSimpleLists, result);
+        }
+        else
+        {
+          var valueType = property.Type;
+          var newPath = new ConfigPath(path.Concat(property.Name));
+          var count = 0;
+          while (true)
+          {
+            count++;
+            if (valueType is ArrayType arrayType)
+            {
+              newPath.Add(new AnyInteger());
+              valueType = arrayType.ValueType;
+            }
+            else if (valueType is DictionaryType dictionaryType)
+            {
+              newPath.Add(dictionaryType.KeyType is NumberType numberType && numberType.IsInteger
+                ? (IConfigSection)new AnyInteger()
+                : new AnyString());
+              valueType = dictionaryType.ValueType;
+            }
+            else
+            {
+              count--;
+              break;
+            }
+          }
+
+          if (count == 0)
+            throw new InvalidOperationException("Unsupported data type");
+
+          result.Add(new Property(newPath, valueType)
+          {
+            Hidden = property.Hidden,
+            MaskValue = property.MaskValue
+          });
+        }
       }
     }
   }

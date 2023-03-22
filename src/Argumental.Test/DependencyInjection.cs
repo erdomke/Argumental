@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Extensions.Hosting;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -32,8 +33,8 @@ Options:
   -?, -h, --help    Show help and usage information
 
 Environment:
-  SCL_OFFSET        File offset.
   SCL_READ__#       Input files to be processed.
+  SCL_OFFSET        File offset.
   SCL_STDIN         Read from stdin.
   SCL_VERBOSE       Prints all messages to standard output.", result.Out.ToString()?.TrimEnd());
     }

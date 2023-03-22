@@ -58,23 +58,24 @@ namespace InjectingIOptions
       return CommandApp.Default()
         .Run(app =>
         {
-          var pipeline = app.Register(CommandPipeline<IServiceRegistrar>.Default())
+          var pipeline = CommandPipeline<IServiceRegistrar>.Default()
             .AddArgs(args)
             .AddAlias("-r", "--read")
             .AddCommand("", c =>
             {
               c.RegisterImplementation<ICommand, OptionsCommand>(new OptionGroup<Options>());
             });
+          app.AddSingleton(pipeline);
 
           var configuration = pipeline.Build(b => 
             b.AddEnvironmentVariables("SCL_"));
-          
-          return pipeline.Invoke(configuration, null)
-            .Register(
-              new ServiceCollection()
-                .AddLogging(b => b.AddConfiguration(configuration))
-            )
-            .BuildServiceProvider()
+
+          var services = new ServiceCollection()
+             .AddLogging(b => b.AddConfiguration(configuration));
+          var provider = pipeline.Invoke(configuration, null)
+            .AddServices(services)
+            .BuildServiceProvider();
+          return app.RegisterDisposable(provider)
             .GetService<ICommand>()
             .Execute();
         });

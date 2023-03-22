@@ -9,7 +9,7 @@ namespace InjectingLazyConstant
     public static int Main_(string[] args)
     {
       return CommandApp.Default()
-        .Run(app => app.Register(CommandPipeline<int>.Default())
+        .Run(app => CommandPipeline<int>.Default()
           .AddArgs(args)
           .AddCommand("", c =>
           {
@@ -21,8 +21,9 @@ namespace InjectingLazyConstant
             }, new Option<string>("file", "The file to read and display on the console.")
             , new Binder<ILogger>
             {
-              Handler = ctx => LoggerFactory.Create(b =>
-                b.AddConfiguration(ctx.Configuration))
+              Handler = ctx => app.RegisterDisposable(
+                  LoggerFactory.Create(b => b.AddConfiguration(ctx.Configuration))
+                )
                 .CreateLogger("LoggerCategory")
             });
           })

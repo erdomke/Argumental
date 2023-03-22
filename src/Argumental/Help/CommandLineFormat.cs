@@ -39,11 +39,8 @@ namespace Argumental
     public IEnumerable<ConfigProperty> GetProperties(IEnumerable<IProperty> properties)
     {
       var propList = new List<IProperty>();
-      if (PosixConventions)
-        propList.AddRange(properties.Where(p => !(p.Name.Last() is AnyListIndex)));
-      else
-        propList.AddRange(properties.Where(p => !(p.Type is ArrayType)));
-
+      Property.FlattenList(Array.Empty<IConfigSection>(), properties, PosixConventions, propList);
+      
       var globalStart = propList.Count;
       if (!string.IsNullOrEmpty(_versionName))
         propList.Add(new Property(new ConfigPath(new ConfigSection(_versionName, "Show version information")), new BooleanType()));

@@ -4,6 +4,6 @@ namespace Argumental
 {
   public interface IServiceRegistrar
   {
-    IServiceCollection Register(IServiceCollection services);
+    IServiceCollection AddServices(IServiceCollection services);
   }
 }

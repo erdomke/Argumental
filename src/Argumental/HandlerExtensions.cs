@@ -99,7 +99,7 @@ namespace Argumental
         _implementation = implementation;
       }
 
-      public IServiceCollection Register(IServiceCollection services)
+      public IServiceCollection AddServices(IServiceCollection services)
       {
         foreach (var option in _context.Handler.Providers.OfType<IOptionGroup>())
           option.Register(services, _context.Configuration);

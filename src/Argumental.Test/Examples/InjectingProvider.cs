@@ -11,7 +11,7 @@ namespace InjectingProvider
     {
       return CommandApp.Default()
         .Run(app => {
-          var pipeline = app.Register(CommandPipeline<int>.Default())
+          var pipeline = CommandPipeline<int>.Default()
             .AddArgs(args)
             .AddCommand("", c =>
             {
@@ -27,6 +27,7 @@ namespace InjectingProvider
                   .CreateLogger("LoggerCategory")
               });
             });
+          app.AddSingleton(pipeline);
 
           var configuration = pipeline.Build(b =>
             b.AddEnvironmentVariables("SCL_"));
@@ -34,6 +35,7 @@ namespace InjectingProvider
           var provider = new ServiceCollection()
             .AddLogging(b => b.AddConfiguration(configuration))
             .BuildServiceProvider();
+          app.RegisterDisposable(provider);
 
           return pipeline.Invoke(configuration, provider);
         });

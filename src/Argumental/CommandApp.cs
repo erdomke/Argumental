@@ -14,12 +14,15 @@ namespace Argumental
       = new Dictionary<Type, ExceptionHandler>();
     private readonly Dictionary<Type, Func<IServiceProvider, object>> _services
       = new Dictionary<Type, Func<IServiceProvider, object>>();
+    private readonly Dictionary<Type, object> _singletons
+      = new Dictionary<Type, object>();
+    private List<IDisposable> _instancesToDispose = new List<IDisposable>();
 
     public CommandApp(AssemblyMetadata metadata)
     {
-      Register(metadata);
-      Register(s => ConfigFormatRepository.Default(s.GetService<IConfigurationBuilder>()));
-      Register(s => s.GetService<ICommandPipeline>()?.ConfigurationBuilder);
+      AddSingleton(metadata);
+      AddTransient(s => ConfigFormatRepository.Default(s.GetService<IConfigurationBuilder>()));
+      AddTransient(s => s.GetService<ICommandPipeline>()?.ConfigurationBuilder);
     }
 
     public CommandApp AddHandler<T>(int? exitCode, Action<T, CommandApp> handler) where T : Exception
@@ -34,21 +37,30 @@ namespace Argumental
       return this;
     }
         
-    public CommandApp Register<T>(Func<IServiceProvider, T> factory) where T : class
+    public CommandApp AddTransient<T>(Func<IServiceProvider, T> factory) where T : class
     {
-      _services[typeof(T)] = factory;
+      foreach (var type in TypesToRegister(typeof(T)))
+      {
+        _services[type] = factory;
+        _singletons.Remove(type);
+      }
       return this;
     }
 
-    public CommandApp Register<T>(T instance) where T : class
+    public CommandApp AddSingleton<T>(T instance) where T : class
     {
-      return Register(_ => instance);
+      foreach (var type in TypesToRegister(typeof(T)))
+      {
+        _singletons[type] = instance;
+        _services.Remove(type);
+      }
+      return this;
     }
 
-    public CommandPipeline<T> Register<T>(CommandPipeline<T> pipeline)
+    public T RegisterDisposable<T>(T value) where T : IDisposable
     {
-      Register<ICommandPipeline>(pipeline);
-      return pipeline;
+      _instancesToDispose.Add(value);
+      return value;
     }
 
     public int Run(Action<CommandApp> callback)
@@ -102,6 +114,17 @@ namespace Argumental
         Environment.ExitCode = exitCode ?? 
           (Environment.ExitCode == 0 ? (int)ExitCode.Failure : Environment.ExitCode);
       }
+      finally
+      {
+        foreach (var instance in _instancesToDispose)
+        {
+          try
+          {
+            instance.Dispose();
+          }
+          catch (Exception) { }
+        }
+      }
       return Environment.ExitCode;
     }
 
@@ -133,9 +156,9 @@ namespace Argumental
         .AddHandler<ConfigurationException>(ExitCode.UsageError, (e, a) =>
         {
           if (e.Pipeline != null)
-            a.Register(e.Pipeline);
+            a.AddSingleton(e.Pipeline);
           if (e.ConfigurationBuilder != null)
-            a.Register(e.ConfigurationBuilder);
+            a.AddSingleton(e.ConfigurationBuilder);
           a.GetService<ConfigFormatRepository>().WriteError(writer, a.GetService<AssemblyMetadata>(), e);
         })
         .AddHandler<OptionsValidationException>(ExitCode.UsageError, (e, a) =>
@@ -156,9 +179,41 @@ namespace Argumental
     public object GetService(Type serviceType)
     {
       if (_services.TryGetValue(serviceType, out var factory))
-        return factory(this);
+      {
+        var result = factory(this);
+        if (result is IDisposable disposable)
+          RegisterDisposable(disposable);
+        return result;
+      }
+      else if (_singletons.TryGetValue(serviceType, out var singleton))
+      {
+        return singleton;
+      }
+      else if (serviceType == typeof(CancelKeyPressSource)
+        || serviceType == typeof(ICancellationTokenSource))
+      {
+        var result = RegisterDisposable(new CancelKeyPressSource());
+        _singletons[typeof(CancelKeyPressSource)] = result;
+        _singletons[typeof(ICancellationTokenSource)] = result;
+        return result;
+      }
+      else if (serviceType == typeof(IServiceProvider)
+        || serviceType == typeof(CommandApp))
+      {
+        return this;
+      }
       else
+      {
         return null;
+      }
+    }
+
+    private IEnumerable<Type> TypesToRegister(Type type)
+    {
+      yield return type;
+      if (type != typeof(ICommandPipeline)
+        && typeof(ICommandPipeline).IsAssignableFrom(type))
+        yield return typeof(ICommandPipeline);
     }
 
     private struct ExceptionHandler

@@ -46,7 +46,10 @@ namespace Argumental
         || type == typeof(decimal))
         dataType = new NumberType(nullableType ?? type);
       else if (type.IsArray && TryGetDataType(type.GetElementType(), null, out IDataType arrayElement))
-        dataType = new ArrayType(type, arrayElement);
+      {
+        if (type.GetArrayRank() == 1)
+          dataType = new ArrayType(type, arrayElement);
+      }
       else if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>))
         return TryGetDataType(Nullable.GetUnderlyingType(type), type, out dataType);
       else

@@ -7,7 +7,7 @@ namespace SubcommandApp
     public static Task<int> Main_(string[] args)
     {
       return CommandApp.Default()
-        .RunAsync(app => app.Register(CommandPipeline<Task<int>>.Default())
+        .RunAsync(app => CommandPipeline<Task<int>>.Default()
           .AddArgs(args)
           .AddCommand("read", c =>
           {

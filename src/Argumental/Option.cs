@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
 
 namespace Argumental
 {
@@ -25,9 +26,10 @@ namespace Argumental
     {
       get
       {
-        var result = new List<IProperty>();
-        Property.BuildPropertyList(this, result);
-        return result;
+        if (!Name.Any() && _type is ObjectType objectType)
+          return objectType.Properties;
+        else
+          return new[] { this };
       }
     }
 

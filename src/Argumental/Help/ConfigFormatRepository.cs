@@ -44,7 +44,7 @@ namespace Argumental
       if (exception.SelectedCommand != null)
         schemaWriter.Write(metadata, exception.SelectedCommand, exception.Errors);
       else
-        schemaWriter.Write(metadata, exception.Pipeline.Commands, exception.Errors);
+        schemaWriter.Write(metadata, exception.Pipeline?.Commands ?? Enumerable.Empty<ISchemaProvider>(), exception.Errors);
     }
 
     public static ConfigFormatRepository Default(IConfigurationBuilder builder)

@@ -1,6 +1,6 @@
 ﻿namespace Argumental
 {
-  internal class AnyListIndex : IConfigSection
+  internal class AnyInteger : IConfigSection
   {
     public bool Matches(string segment)
     {

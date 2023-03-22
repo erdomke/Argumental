@@ -11,19 +11,11 @@ namespace Argumental
 {
   public class OptionGroup<T> : IOptionProvider<T>, IOptionGroup, IValidateOptions<T> where T : class
   {
-    private IDataType _type;
+    private ObjectType _type;
 
     public ConfigPath Name { get; }
 
-    public IEnumerable<IProperty> Properties
-    {
-      get
-      {
-        var result = new List<IProperty>();
-        Property.BuildPropertyList(new Property(Name, _type), result);
-        return result;
-      }
-    }
+    public IEnumerable<IProperty> Properties => _type.Properties;
 
     public OptionGroup(params ConfigSection[] parents)
     {

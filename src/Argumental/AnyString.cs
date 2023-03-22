@@ -1,6 +1,6 @@
 ﻿namespace Argumental
 {
-  internal class AnyDictKey : IConfigSection
+  internal class AnyString : IConfigSection
   {
     public bool Matches(string segment)
     {

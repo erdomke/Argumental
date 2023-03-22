@@ -14,7 +14,7 @@ namespace SimpleOptionsClass
     public static int Main_(string[] args)
     {
       return CommandApp.Default()
-        .Run(app => app.Register(CommandPipeline<int>.Default())
+        .Run(app => CommandPipeline<int>.Default()
           .AddArgs(args)
           .AddCommand("", c =>
           {

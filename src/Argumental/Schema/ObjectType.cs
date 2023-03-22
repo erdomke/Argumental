@@ -1,15 +1,29 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
-using System.Text;
 
 namespace Argumental
 {
-  internal class ObjectType : IDataType
+  internal class ObjectType : IDataType, ISchemaProvider
   {
+    private IEnumerable<IProperty> _properties;
+
     public Type Type { get; }
 
     public bool IsConvertibleFromString => false;
+
+    public IEnumerable<IProperty> Properties
+    {
+      get
+      {
+        if (_properties == null)
+          _properties = GetAllProperties()
+            .Select(p => new Property(Array.Empty<IConfigSection>(), p))
+            .ToList();
+        return _properties;
+      }
+    }
 
     public ObjectType(Type type)
     {
@@ -21,7 +35,7 @@ namespace Argumental
       throw new NotImplementedException();
     }
 
-    public IEnumerable<PropertyInfo> GetAllProperties()
+    private IEnumerable<PropertyInfo> GetAllProperties()
     {
       var baseType = Type;
       while (baseType != typeof(object))
