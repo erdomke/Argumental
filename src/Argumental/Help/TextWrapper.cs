@@ -14,6 +14,8 @@ namespace Argumental
     private TextWriter _writer;
     private bool _allowBreakNext = true;
     private char _onlyAllowBreakAfter = '\0';
+    private StringBuilder _wordBuffer;
+    private int _wordStack = 0;
 
     public override Encoding Encoding => _writer.Encoding;
     public int Indent => _indent.Sum(i => i.Length);
@@ -62,6 +64,12 @@ namespace Argumental
 
     public override void Write(char value)
     {
+      if (_wordBuffer != null)
+      {
+        _wordBuffer.Append(value);
+        return;
+      }  
+
       if (value == ' ')
       {
         WriteSpace(1);
@@ -83,6 +91,12 @@ namespace Argumental
 
     public override void Write(char[] buffer, int index, int count)
     {
+      if (_wordBuffer != null)
+      {
+        _wordBuffer.Append(buffer, index, count);
+        return;
+      }
+
       var start = index;
       var lineIndent = 0;
 
@@ -168,6 +182,12 @@ namespace Argumental
       if (length < 0)
         length = word.Length;
 
+      if (_wordBuffer != null)
+      {
+        _wordBuffer.Append(word, start, length);
+        return this;
+      }
+
       if (_position < Indent)
       {
         WriteIndent();
@@ -197,6 +217,24 @@ namespace Argumental
         _allowBreakNext = false;
 
       return this;
+    }
+
+    public void StartWord()
+    {
+      _wordBuffer = _wordBuffer ?? new StringBuilder();
+      _wordStack++;
+    }
+
+    public void EndWord()
+    {
+      _wordStack--;
+      if (_wordStack <= 0 && _wordBuffer != null)
+      {
+        var word = _wordBuffer.ToString();
+        _wordBuffer = null;
+        _wordStack = 0;
+        WriteWord(word);
+      }
     }
 
     private void WriteChunks(char[] word, int start, int length, int allowedLength)

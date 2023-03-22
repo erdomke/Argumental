@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Argumental.Help
+namespace Argumental
 {
   internal class EnvironmentVariableFormat : IConfigFormat
   {

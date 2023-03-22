@@ -1,5 +1,4 @@
-﻿using Argumental.Help;
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -9,7 +8,7 @@ namespace Argumental
 {
   public class ConfigFormatRepository
   {
-    private readonly List<ConfigSchemaWriter> _writers = new List<ConfigSchemaWriter>();
+    private readonly List<IHelpWriter> _writers = new List<IHelpWriter>();
 
     public List<IConfigFormat> Formats { get; } = new List<IConfigFormat>();
 
@@ -19,7 +18,7 @@ namespace Argumental
       return this;
     }
 
-    public ConfigFormatRepository AddWriter(ConfigSchemaWriter writer)
+    public ConfigFormatRepository AddWriter(IHelpWriter writer)
     {
       _writers.Add(writer);
       return this;
@@ -39,18 +38,24 @@ namespace Argumental
 
     public void WriteError(TextWriter writer, AssemblyMetadata metadata, ConfigurationException exception)
     {
-      var schemaWriter = _writers.First();
-      schemaWriter.Configure(writer, this);
+      var context = new HelpContext()
+      {
+        Formats = this,
+        Metadata = metadata,
+        Section = exception.SelectedCommand == null ? HelpSection.Root : HelpSection.Command,
+      };
+      context.Errors.AddRange(exception.Errors);
       if (exception.SelectedCommand != null)
-        schemaWriter.Write(metadata, exception.SelectedCommand, exception.Errors);
-      else
-        schemaWriter.Write(metadata, exception.Pipeline?.Commands ?? Enumerable.Empty<ISchemaProvider>(), exception.Errors);
+        context.Schemas.Add(exception.SelectedCommand);
+      else if (exception.Pipeline?.Commands != null)
+        context.Schemas.AddRange(exception.Pipeline.Commands);
+      _writers.First().Write(context, writer);
     }
 
     public static ConfigFormatRepository Default(IConfigurationBuilder builder)
     {
       var result = new ConfigFormatRepository()
-        .AddWriter(new DocOptSchemaWriter());
+        .AddWriter(new DocOptWriter());
       if (builder != null)
       {
         foreach (var source in builder.Sources)

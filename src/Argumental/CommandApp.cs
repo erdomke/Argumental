@@ -130,16 +130,7 @@ namespace Argumental
 
     public static CommandApp Default()
     {
-      var width = 80;
-      try
-      {
-        width = Console.WindowWidth;
-      }
-      catch (IOException) { }
-      return Default(new TextWrapper(Console.Out)
-      {
-        MaxWidth = width
-      });
+      return Default(Console.Out);
     }
 
     public static CommandApp Default(TextWriter writer)
