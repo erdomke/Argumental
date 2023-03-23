@@ -4,10 +4,15 @@ using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace Argumental
 {
+  /// <summary>
+  /// A command line application that prints help to the console and returns
+  /// an appropriate exit code based on the exception encountered.
+  /// </summary>
   public class CommandApp : IServiceProvider
   {
     private readonly Dictionary<Type, ExceptionHandler> _handlers 
@@ -17,6 +22,12 @@ namespace Argumental
     private readonly Dictionary<Type, object> _singletons
       = new Dictionary<Type, object>();
     private List<IDisposable> _instancesToDispose = new List<IDisposable>();
+
+    public ILookup<int, Type> ExitCodes => _handlers
+      .Where(k => k.Value.ExitCode.HasValue)
+      .OrderBy(k => k.Value.ExitCode.Value)
+      .ToLookup(k => k.Value.ExitCode.Value, k => k.Key);
+    public AssemblyMetadata Metadata => (AssemblyMetadata)_singletons[typeof(AssemblyMetadata)];
 
     public CommandApp(AssemblyMetadata metadata)
     {
@@ -140,6 +151,7 @@ namespace Argumental
         .AddHandler<DirectoryNotFoundException>(ExitCode.NoInput, null)
         .AddHandler<IOException>(ExitCode.IoError, null)
         .AddHandler<UnauthorizedAccessException>(ExitCode.NoPermissions, null)
+        .AddHandler<OperationCanceledException>(ExitCode.TempFailure, null)
         .AddHandler<VersionException>(ExitCode.UsageError, (e, a) =>
         {
           writer.WriteLine(a.GetService<AssemblyMetadata>().Version);
@@ -150,7 +162,7 @@ namespace Argumental
             a.AddSingleton(e.Pipeline);
           if (e.ConfigurationBuilder != null)
             a.AddSingleton(e.ConfigurationBuilder);
-          a.GetService<ConfigFormatRepository>().WriteError(writer, a.GetService<AssemblyMetadata>(), e);
+          a.GetService<ConfigFormatRepository>().WriteError(writer, a, e);
         })
         .AddHandler<OptionsValidationException>(ExitCode.UsageError, (e, a) =>
         {
@@ -159,7 +171,7 @@ namespace Argumental
           {
             Pipeline = pipeline
           };
-          a.GetService<ConfigFormatRepository>().WriteError(writer, a.GetService<AssemblyMetadata>(), configEx);
+          a.GetService<ConfigFormatRepository>().WriteError(writer, a, configEx);
         })
         .AddHandler<Exception>(ExitCode.Failure, (e, _) =>
         {

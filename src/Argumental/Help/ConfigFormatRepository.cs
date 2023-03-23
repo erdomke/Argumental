@@ -1,6 +1,9 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using Argumental.Help;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 
@@ -12,9 +15,15 @@ namespace Argumental
 
     public List<IConfigFormat> Formats { get; } = new List<IConfigFormat>();
 
-    public ConfigFormatRepository AddFormat(IConfigFormat format)
+    public ConfigFormatRepository AddFormat<T>(Action<T> update) where T : IConfigFormat, new()
     {
-      Formats.Add(format);
+      var existing = Formats.OfType<T>().FirstOrDefault();
+      if (existing == null)
+      {
+        existing = new T();
+        Formats.Add(existing);
+      }
+      update(existing);
       return this;
     }
 
@@ -36,12 +45,13 @@ namespace Argumental
         .ThenBy(p => p.IsPositional ? "" : p.Name.ToString(), StringComparer.OrdinalIgnoreCase));
     }
 
-    public void WriteError(TextWriter writer, AssemblyMetadata metadata, ConfigurationException exception)
+    public void WriteError(TextWriter writer, CommandApp app, ConfigurationException exception)
     {
       var context = new HelpContext()
       {
+        App = app,
         Formats = this,
-        Metadata = metadata,
+        Metadata = app.GetService<AssemblyMetadata>(),
         Section = exception.SelectedCommand == null ? HelpSection.Root : HelpSection.Command,
       };
       context.Errors.AddRange(exception.Errors);
@@ -62,27 +72,26 @@ namespace Argumental
         {
           if (source is ICommandPipeline pipeline)
           {
-            var formatsToRemove = result.Formats.OfType<CommandLineFormat>().ToList();
-            foreach (var format in formatsToRemove)
-              result.Formats.Remove(format);
-
-            result.AddFormat(new CommandLineFormat(pipeline.SwitchMappings, true
+            result.AddFormat<CommandLineFormat>(f => f.AddConfiguration(pipeline.SwitchMappings, true
               , pipeline.HelpCommand?.Name.First().ToString()
               , pipeline.VersionCommand?.Name.First().ToString()));
           }
           else if (source.GetType().FullName == "Microsoft.Extensions.Configuration.CommandLine.CommandLineConfigurationSource")
           {
-            if (!result.Formats.OfType<CommandLineFormat>().Any())
-            {
-              var mappings = (IDictionary<string, string>)source.GetType().GetProperty("SwitchMappings").GetValue(source);
-              result.AddFormat(new CommandLineFormat(mappings, false));
-            }
+            var mappings = (IDictionary<string, string>)source.GetType().GetProperty("SwitchMappings").GetValue(source);
+            result.AddFormat<CommandLineFormat>(f => f.AddConfiguration(mappings, false));
           }
           else if (source.GetType().FullName == "Microsoft.Extensions.Configuration.EnvironmentVariables.EnvironmentVariablesConfigurationSource")
           {
             var prefix = (string)source.GetType().GetProperty("Prefix").GetValue(source);
-            result.AddFormat(new EnvironmentVariableFormat(prefix));
-          } 
+            result.AddFormat<EnvironmentVariableFormat>(f => f.Prefixes.Add(prefix));
+          }
+          else if (source.GetType().FullName == "Microsoft.Extensions.Configuration.Json.JsonConfigurationSource")
+          {
+            var path = (string)source.GetType().GetProperty("Path").GetValue(source);
+            if (!string.IsNullOrEmpty(path))
+              result.AddFormat<JsonFileFormat>(f => f.Paths.Add(path));
+          }
         }
       }
       return result;

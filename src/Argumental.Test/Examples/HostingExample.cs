@@ -1,11 +1,12 @@
 ﻿using Argumental;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.ComponentModel.DataAnnotations;
 
-namespace InjectingIOptions
+namespace HostingExample
 {
   class Program
   {
@@ -58,26 +59,24 @@ namespace InjectingIOptions
       return CommandApp.Default()
         .Run(app =>
         {
-          var pipeline = CommandPipeline<IServiceRegistrar>.Default()
-            .AddArgs(args)
-            .AddAlias("-r", "--read")
-            .AddCommand("", c =>
+          var command = new Command<IServiceRegistrar>()
+            .RegisterImplementation<ICommand, OptionsCommand>(new OptionGroup<Options>());
+
+          var host = Host.CreateDefaultBuilder(args)
+            .ConfigureLogging(b => b
+              .AddConsole(c => c.LogToStandardErrorThreshold = LogLevel.Trace))
+            .ConfigureAppConfiguration(b => app.AddSingleton(b))
+            .ConfigureServices((context, collection) =>
             {
-              c.RegisterImplementation<ICommand, OptionsCommand>(new OptionGroup<Options>());
-            });
-          app.AddSingleton(pipeline);
+              command.Invoke(context.Configuration, app)
+                .AddServices(collection);
+            })
+            .Build();
 
-          var configuration = pipeline.Build(b => 
-            b.AddEnvironmentVariables("SCL_"));
+          if (args.Length == 1 && args[0] == "help")
+            throw new ConfigurationException(command);
 
-          var services = new ServiceCollection()
-            .AddLogging(b => b.AddConfiguration(configuration));
-          var provider = pipeline.Invoke(configuration, null)
-            .AddServices(services)
-            .BuildServiceProvider();
-          return app.RegisterDisposable(provider)
-            .GetService<ICommand>()
-            .Execute();
+          return host.Services.GetService<ICommand>().Execute();
         });
     }
   }

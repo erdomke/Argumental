@@ -4,6 +4,7 @@ namespace Argumental
 {
   public class HelpContext
   {
+    public CommandApp App { get; set; }
     public List<string> Errors { get; } = new List<string>();
     public ConfigFormatRepository Formats { get; set; }
     public int? MaxLineWidth { get; }

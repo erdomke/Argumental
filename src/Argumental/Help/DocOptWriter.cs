@@ -5,8 +5,15 @@ using System.Xml.Linq;
 
 namespace Argumental
 {
+  /// <summary>
+  /// Writes documentation in the <see href="http://docopt.org/"/>docopt</see> format.
+  /// </summary>
   public class DocOptWriter : IHelpWriter
   {
+    /// <inheritdoc />
+    public string Format => "docopt";
+
+    /// <inheritdoc />
     public void Write(HelpContext context, TextWriter writer)
     {
       var xml = new DocbookWriter().Write(context);
@@ -110,6 +117,14 @@ namespace Argumental
           writer.Write("  ");
           WriteText(element.Element(DocbookSchema.listitem), writer);
           writer.DecreaseIndent();
+          writer.WriteLine();
+        }
+        else if (element.Name == DocbookSchema.para
+          && !(element == element.Parent.FirstNode))
+        {
+          foreach (var child in element.Nodes())
+            WriteText(child, writer);
+          writer.WriteLine();
           writer.WriteLine();
         }
         else

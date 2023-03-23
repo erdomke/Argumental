@@ -1,16 +1,17 @@
 ﻿using System.Collections.Generic;
+using System.Xml.Linq;
 
 namespace Argumental
 {
   public class ConfigProperty
   {
-    public IEnumerable<string> Aliases { get; }
+    public IEnumerable<XElement> DocbookAliases { get; }
     public bool IsGlobal { get; }
     public IProperty Property { get; }
 
-    public ConfigProperty(IEnumerable<string> aliases, IProperty property, bool global = false)
+    public ConfigProperty(IEnumerable<XElement> aliases, IProperty property, bool global = false)
     {
-      Aliases = aliases;
+      DocbookAliases = aliases;
       Property = property;
       IsGlobal = global;
     }

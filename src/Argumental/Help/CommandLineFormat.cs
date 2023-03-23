@@ -1,39 +1,46 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Xml.Linq;
 
 namespace Argumental
 {
   public class CommandLineFormat : IConfigFormat
   {
-    private readonly string _helpName;
-    private readonly string _versionName;
+    private string _helpName;
+    private string _versionName;
 
-    public ILookup<string, string> AliasLookup { get; }
+    public Dictionary<string, List<string>> AliasLookup { get; private set; }
 
-    public Func<IProperty, bool> Filter { get; set; }
+    public bool PosixConventions { get; private set; }
 
-    public bool PosixConventions { get; }
-
-    public CommandLineFormat(IDictionary<string, string> switchMappings, bool posixConventions, string helpName = null, string versionName = null)
+    public CommandLineFormat AddConfiguration(IDictionary<string, string> switchMappings, bool posixConventions, string helpName = null, string versionName = null)
     {
-      if (switchMappings is Dictionary<string, string> dict) 
-      { 
-        AliasLookup = switchMappings.ToLookup(k => k.Value.TrimStart('-', '/')
-          , k => k.Key
-          , dict.Comparer);
-      }
-      else
+      if (switchMappings != null)
       {
-        AliasLookup = (switchMappings ?? new Dictionary<string, string>())
-          .ToLookup(k => k.Value.TrimStart('-', '/')
-            , k => k.Key);
+        if (AliasLookup == null)
+        {
+          AliasLookup = switchMappings is Dictionary<string, string> dict
+            ? new Dictionary<string, List<string>>(dict.Comparer)
+            : new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        foreach (var group in switchMappings.ToLookup(k => k.Value.TrimStart('-', '/')
+          , k => k.Key
+          , AliasLookup.Comparer))
+        {
+          if (AliasLookup.TryGetValue(group.Key, out var list))
+            list.AddRange(group);
+          else
+            AliasLookup[group.Key] = group.ToList();
+        }
       }
 
-      _helpName = helpName;
-      _versionName = versionName;
-      
-      PosixConventions = posixConventions;
+      _helpName = _helpName ?? helpName;
+      _versionName = _versionName ?? versionName;
+
+      PosixConventions = PosixConventions || posixConventions;
+      return this;
     }
 
     public IEnumerable<ConfigProperty> GetProperties(IEnumerable<IProperty> properties)
@@ -51,14 +58,28 @@ namespace Argumental
       {
         var fullName = propList[i].Name.ToString();
         if (propList[i].IsPositional)
-          yield return new ConfigProperty(new[] { $"<{propList[i].Name.Last().ToString().Replace(' ', '-')}>" }
+          yield return new ConfigProperty(new[] { 
+            new XElement(DocbookSchema.replaceable, propList[i].Name.OfType<ConfigSection>().Last().ToString()) 
+          }
           , propList[i], i >= globalStart);
         else
-          yield return new ConfigProperty(new[] { "--" + fullName }.Concat(AliasLookup[fullName])
+          yield return new ConfigProperty(new[] { "--" + fullName }
+            .Concat(AliasLookup?.TryGetValue(fullName, out var list) == true 
+              ? list
+              : (IEnumerable<string>)Array.Empty<string>())
             .OrderBy(n => n.Length)
-            .Select(n => propList[i].Type is BooleanType && PosixConventions
-              ? n
-              : $"{n} <{propList[i].Name.Last().ToString().Replace(' ', '-')}>")
+            .Select(n => {
+              if (propList[i].Type is BooleanType && PosixConventions)
+                return new XElement(DocbookSchema.arg, n);
+              var result = new XElement(DocbookSchema.arg);
+              if (propList[i].IsRequired())
+                result.Add(new XAttribute("choice", "req"));
+              if (propList[i].Type is ArrayType)
+                result.Add(new XAttribute("rep", "repeat"));
+              result.Add(n + " ");
+              result.Add(new XElement(DocbookSchema.replaceable, propList[i].Name.OfType<ConfigSection>().Last().ToString()));
+              return result;
+            })
             .ToList(), propList[i], i >= globalStart);
       }
     }

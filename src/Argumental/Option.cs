@@ -53,7 +53,7 @@ namespace Argumental
       if (Reflection.TryGetDataType(typeof(T), out var dataType))
         _type = dataType;
       else
-        throw new NotSupportedException("Use an OptionGroup for complex options");
+        _type = new ObjectType(typeof(T));
     }
 
     public T Get(InvocationContext context)

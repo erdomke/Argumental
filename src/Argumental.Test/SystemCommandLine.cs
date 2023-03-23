@@ -37,7 +37,18 @@ Usage:
 Options:
   --file <file>     The file to read and display on the console.
   --version         Show version information
-  -?, -h, --help    Show help and usage information", result.Out.ToString()?.TrimEnd());
+  -?, -h, --help    Show help and usage information
+
+Exit Status:
+  0                 The application successfully completed.
+  1                 The application failed with a general error.
+  64                The number or syntax of the arguments passed to the command
+                    is incorrect.
+  66                An input file does not exist or is not readable.
+  74                An error occurred while doing I/O on a file.
+  75                A temporary failure occurred. Please try again.
+  77                The current user does not have sufficient permission to
+                    perform the operation.", result.Out.ToString()?.TrimEnd());
       result = await CommandResult.RunAsync(new[] { "--version" }, BasicApp.Program.Main_);
       Assert.AreEqual(@"1.0.0", result.Out.ToString()?.TrimEnd());
     }
@@ -76,7 +87,18 @@ Options:
   --light-mode      Background color of text displayed on the console: default
                     is black, light mode is white. [default: False]
   --version         Show version information
-  -?, -h, --help    Show help and usage information", result.Out.ToString()?.TrimEnd());
+  -?, -h, --help    Show help and usage information
+
+Exit Status:
+  0                 The application successfully completed.
+  1                 The application failed with a general error.
+  64                The number or syntax of the arguments passed to the command
+                    is incorrect.
+  66                An input file does not exist or is not readable.
+  74                An error occurred while doing I/O on a file.
+  75                A temporary failure occurred. Please try again.
+  77                The current user does not have sufficient permission to
+                    perform the operation.", result.Out.ToString()?.TrimEnd());
       result = await CommandResult.RunAsync(new[] { "read", "--file", "sampleQuotes.txt" }, SubcommandApp.Program.Main_);
       Assert.AreEqual(@"sampleQuotes.txt, 42, White, False", result.Out.ToString()?.TrimEnd());
       result = await CommandResult.RunAsync(new[] { "read", "--file", "sampleQuotes.txt", "--delay", "0" }, SubcommandApp.Program.Main_);
@@ -103,7 +125,18 @@ Options:
   --light-mode      Background color of text displayed on the console: default
                     is black, light mode is white. [default: False]
   --version         Show version information
-  -?, -h, --help    Show help and usage information", result.Out.ToString()?.TrimEnd());
+  -?, -h, --help    Show help and usage information
+
+Exit Status:
+  0                 The application successfully completed.
+  1                 The application failed with a general error.
+  64                The number or syntax of the arguments passed to the command
+                    is incorrect.
+  66                An input file does not exist or is not readable.
+  74                An error occurred while doing I/O on a file.
+  75                A temporary failure occurred. Please try again.
+  77                The current user does not have sufficient permission to
+                    perform the operation.", result.Out.ToString()?.TrimEnd());
     }
   }
 }

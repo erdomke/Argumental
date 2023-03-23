@@ -1,15 +1,34 @@
-﻿using System;
+﻿using Argumental.Help;
+using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
 
 namespace Argumental
 {
+  /// <summary>
+  /// Writes documentation in the <see href="https://tdg.docbook.org/tdg/5.2/"/>docbook</see> format.
+  /// </summary>
+  /// <remarks>
+  /// The documentation is structured to follow the order and contents of a 
+  /// <see href="https://man7.org/linux/man-pages/man7/man-pages.7.html"/>standard manpage</see>
+  /// </remarks>
   public class DocbookWriter : IHelpWriter
   {
+    /// <inheritdoc />
+    public string Format => "docbook";
+
+    public Dictionary<int, string> ExitCodeMessages { get; } = typeof(ExitCode)
+      .GetFields(BindingFlags.Public | BindingFlags.Static)
+      .ToDictionary(f => (int)f.GetRawConstantValue()
+      , f => f.GetCustomAttribute<DescriptionAttribute>().Description);
+
+    /// <inheritdoc />
     public XElement Write(HelpContext context)
     {
       var root = new XElement(DocbookSchema.article);
@@ -86,9 +105,9 @@ namespace Argumental
       var synopsis = new XElement(DocbookSchema.cmdsynopsis
         , new XElement(DocbookSchema.command, context.Metadata?.Name)
         , " "
-        , WriteArgument("command", null, false)
+        , new XElement(DocbookSchema.arg, "command")
         , " "
-        , WriteArgument("options", null, false));
+        , new XElement(DocbookSchema.arg, "options"));
       entry.Add(new XElement(DocbookSchema.refsynopsisdiv, synopsis));
 
       var options = context.Formats.GetProperties<CommandLineFormat>(Array.Empty<IProperty>()).ToList();
@@ -96,7 +115,7 @@ namespace Argumental
       {
         var variableList = new XElement(DocbookSchema.variablelist);
         foreach (var option in options)
-          variableList.Add(WriteOption(option, typeof(CommandLineFormat)));
+          variableList.Add(WriteOption(option));
         entry.Add(new XElement(DocbookSchema.refsection
           , new XElement(DocbookSchema.title, "Options")
           , variableList
@@ -143,11 +162,11 @@ namespace Argumental
       if (string.IsNullOrEmpty(name))
         name = context.Metadata?.Name;
 
-      var entry = new XElement(DocbookSchema.refentry);
+      var result = new XElement(DocbookSchema.refentry);
       var nameDiv = new XElement(DocbookSchema.refnamediv
         , new XElement(DocbookSchema.refname, name)
       );
-      entry.Add(nameDiv);
+      result.Add(nameDiv);
 
       var description = ((schema as ICommand)?.Name.Last() as ConfigSection)?.Description
         ?? context.Metadata?.Description;
@@ -155,7 +174,7 @@ namespace Argumental
         nameDiv.Add(new XElement(DocbookSchema.refpurpose, description));
 
       if (command != null)
-        entry.Add(new XElement(DocbookSchema.refsynopsisdiv, WriteSynopsis(command, context)));
+        result.Add(new XElement(DocbookSchema.refsynopsisdiv, WriteSynopsis(command, context)));
 
       var options = context.Formats.GetProperties<CommandLineFormat>(schema.Properties)
         .Where(p => !p.Property.IsPositional)
@@ -164,9 +183,52 @@ namespace Argumental
       {
         var variableList = new XElement(DocbookSchema.variablelist);
         foreach (var option in options)
-          variableList.Add(WriteOption(option, typeof(CommandLineFormat)));
-        entry.Add(new XElement(DocbookSchema.refsection
+          variableList.Add(WriteOption(option));
+        result.Add(new XElement(DocbookSchema.refsection
           , new XElement(DocbookSchema.title, "Options")
+          , variableList
+        ));
+      }
+
+      if (context.App?.ExitCodes.Any() == true)
+      {
+        var variableList = new XElement(DocbookSchema.variablelist
+          , new XElement(DocbookSchema.varlistentry
+            , new XElement(DocbookSchema.term
+              , new XElement(DocbookSchema.returnvalue, "0")
+            ),
+            new XElement(DocbookSchema.listitem, 
+              new XElement(DocbookSchema.para, ExitCodeMessages[0]))
+          )
+        );
+        foreach (var exitCode in context.App?.ExitCodes)
+        {
+          var para = new XElement(DocbookSchema.para);
+          if (ExitCodeMessages.TryGetValue(exitCode.Key, out var message))
+          {
+            para.Add(message);
+          }
+          else
+          {
+            var first = true;
+            foreach (var type in exitCode)
+            {
+              if (first)
+                first = false;
+              else
+                para.Add(", ");
+              para.Add(new XElement(DocbookSchema.errorname, type.Name));
+            }
+          }
+          variableList.Add(new XElement(DocbookSchema.varlistentry
+            , new XElement(DocbookSchema.term
+              , new XElement(DocbookSchema.returnvalue, exitCode.Key.ToString())
+            ),
+            new XElement(DocbookSchema.listitem, para)
+          ));
+        }
+        result.Add(new XElement(DocbookSchema.refsection
+          , new XElement(DocbookSchema.title, "Exit Status")
           , variableList
         ));
       }
@@ -178,14 +240,41 @@ namespace Argumental
       {
         var variableList = new XElement(DocbookSchema.variablelist);
         foreach (var option in envVars)
-          variableList.Add(WriteOption(option, typeof(EnvironmentVariableFormat)));
-        entry.Add(new XElement(DocbookSchema.refsection
+          variableList.Add(WriteOption(option));
+        result.Add(new XElement(DocbookSchema.refsection
           , new XElement(DocbookSchema.title, "Environment")
           , variableList
         ));
       }
 
-      return entry;
+      var jsonFiles = context.Formats.Formats.OfType<JsonFileFormat>().FirstOrDefault();
+      if (jsonFiles?.Paths.Count > 0)
+      {
+        var jsonVars = context.Formats.GetProperties<JsonFileFormat>(schema.Properties)
+          .Where(p => p.Property.Type.IsConvertibleFromString)
+          .ToList();
+        var para = new XElement(DocbookSchema.para, "JSON: ");
+        var first = true;
+        foreach (var file in jsonFiles.Paths
+          .OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
+        {
+          if (first)
+            first = false;
+          else
+            para.Add(", ");
+          para.Add(new XElement(DocbookSchema.filename, file));
+        }
+        var variableList = new XElement(DocbookSchema.variablelist);
+        foreach (var option in jsonVars)
+          variableList.Add(WriteOption(option));
+        result.Add(new XElement(DocbookSchema.refsection
+          , new XElement(DocbookSchema.title, "Files")
+          , para
+          , variableList
+        ));
+      }
+
+      return result;
     }
 
     private XElement WriteSynopsis(ICommand command, HelpContext context)
@@ -197,79 +286,31 @@ namespace Argumental
         .OfType<ConfigSection>()
         .Where(p => !string.IsNullOrEmpty(p.Name)))
       {
-        result.Add(" ");
-        result.Add(WriteArgument(part.Name, null));
+        result.Add(" ", new XElement(DocbookSchema.arg, part.Name, new XAttribute("choice", "plain")));
       }
       foreach (var property in context.Formats
         .GetProperties<CommandLineFormat>(command.Properties)
         .Where(p => !p.IsGlobal))
       {
-        SplitAlias(property.Aliases.First(), out var name, out var prompt);
-        result.Add(" ");
-        result.Add(WriteArgument(name
-          , prompt
-          , property.Property.IsRequired()
-          , property.Property.Type is ArrayType));
+        result.Add(" ", property.DocbookAliases.First());
       }
 
       return result;
     }
 
-    private void SplitAlias(string alias, out string name, out string prompt)
-    {
-      name = alias;
-      prompt = null;
-      if (name.StartsWith("<"))
-      {
-        prompt = name.TrimStart('<').TrimEnd('>');
-        name = null;
-      }
-      else if (name.TryFindIndex(" <", out var idx))
-      {
-        prompt = name.Substring(idx + 1).TrimStart('<').TrimEnd('>');
-        name = name.Substring(0, idx);
-      }
-    }
-
-    private XElement WriteArgument(string optionName, string prompt, bool? required = null, bool repeat = false)
-    {
-      var result = new XElement(DocbookSchema.arg);
-      if (required == true)
-        result.Add(new XAttribute("choice", "req"));
-      else if (!required.HasValue)
-        result.Add(new XAttribute("choice", "plain"));
-      if (repeat)
-        result.Add(new XAttribute("rep", "repeat"));
-
-      if (!string.IsNullOrEmpty(optionName))
-        result.Add(optionName + (string.IsNullOrEmpty(prompt) ? "" : " "));
-
-      if (!string.IsNullOrEmpty(prompt))
-        result.Add(new XElement(DocbookSchema.replaceable, prompt));
-
-      return result;
-    }
-
-    private XElement WriteOption(ConfigProperty property, Type formatType)
+    private XElement WriteOption(ConfigProperty property)
     {
       var result = new XElement(DocbookSchema.varlistentry);
-      foreach (var alias in property.Aliases)
+      foreach (var alias in property.DocbookAliases)
       {
         var term = new XElement(DocbookSchema.term);
-        if (formatType == typeof(CommandLineFormat))
-        {
-          SplitAlias(alias, out var name, out var prompt);
-          var param = new XElement(DocbookSchema.parameter, new XAttribute("class", "command"));
-          if (!string.IsNullOrEmpty(name))
-            param.Add(name + (string.IsNullOrEmpty(prompt) ? "" : " "));
-          if (!string.IsNullOrEmpty(prompt))
-            param.Add(new XElement(DocbookSchema.replaceable, prompt));
-          term.Add(param);
-        }
-        else if (formatType == typeof(EnvironmentVariableFormat))
-        {
-          term.Add(new XElement(DocbookSchema.envar, alias));
-        }
+        if (alias.Name == DocbookSchema.arg)
+          term.Add(new XElement(DocbookSchema.parameter
+            , new XAttribute("class", "command")
+            , alias.Nodes()
+          ));
+        else
+          term.Add(alias);
         result.Add(term);
       }
       

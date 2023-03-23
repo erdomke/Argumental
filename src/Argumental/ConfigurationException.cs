@@ -12,7 +12,7 @@ namespace Argumental
     public ICommand SelectedCommand { get; }
     public IEnumerable<string> Errors { get; }
 
-    internal ConfigurationException(ICommand selectedCommand, IEnumerable<string> errors)
+    internal ConfigurationException(ICommand selectedCommand, IEnumerable<string> errors = null)
       : base(errors?.Any() == true ? string.Join("\r\n", errors) : "Configuration error.")
     {
       SelectedCommand = selectedCommand;

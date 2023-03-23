@@ -9,10 +9,13 @@ namespace Argumental
     public static XName arg { get; } = docNs + "arg";
     public static XName article { get; } = docNs + "article";
     public static XName cmdsynopsis { get; } = docNs + "cmdsynopsis";
+    public static XName code { get; } = docNs + "code";
     public static XName command { get; } = docNs + "command";
     public static XName copyright { get; } = docNs + "copyright";
     public static XName date { get; } = docNs + "date";
     public static XName envar { get; } = docNs + "envar";
+    public static XName errorname { get; } = docNs + "errorname";
+    public static XName filename { get; } = docNs + "filename";
     public static XName holder { get; } = docNs + "holder";
     public static XName important { get; } = docNs + "important";
     public static XName info { get; } = docNs + "info";
@@ -20,6 +23,7 @@ namespace Argumental
     public static XName literal { get; } = docNs + "literal";
     public static XName para { get; } = docNs + "para";
     public static XName parameter { get; } = docNs + "parameter";
+    public static XName property { get; } = docNs + "property";
     public static XName refentry { get; } = docNs + "refentry";
     public static XName refname { get; } = docNs + "refname";
     public static XName refnamediv { get; } = docNs + "refnamediv";
@@ -28,6 +32,7 @@ namespace Argumental
     public static XName refsynopsisdiv { get; } = docNs + "refsynopsisdiv";
     public static XName releaseinfo { get; } = docNs + "releaseinfo";
     public static XName replaceable { get; } = docNs + "replaceable";
+    public static XName returnvalue { get; } = docNs + "returnvalue";
     public static XName term { get; } = docNs + "term";
     public static XName title { get; } = docNs + "title";
     public static XName variablelist { get; } = docNs + "variablelist";
