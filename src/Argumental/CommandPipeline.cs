@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 
 namespace Argumental
 {
@@ -13,13 +12,7 @@ namespace Argumental
 
     public IReadOnlyList<ICommand> Commands => _commands;
     public IConfigurationBuilder ConfigurationBuilder { get; private set; }
-    public IEqualityComparer<string> OptionComparer { get; private set; } = StringComparer.OrdinalIgnoreCase;
-
-    /// <summary>
-    /// Gets or sets the switch mappings.
-    /// </summary>
-    public IDictionary<string, string> SwitchMappings { get; } = new Dictionary<string, string>();
-
+    
     /// <summary>
     /// Gets or sets the command line args.
     /// </summary>
@@ -29,7 +22,8 @@ namespace Argumental
 
     public ICommand VersionCommand { get; private set; }
 
-    
+    public BaseCommandLineInfo SerializationInfo { get; private set; }
+
     public CommandPipeline()
     {
       _parser = new Parser(this);
@@ -90,12 +84,6 @@ namespace Argumental
       return GetParser();
     }
 
-    public CommandPipeline<TResult> AddAlias(string alias, string full)
-    {
-      SwitchMappings.Add(alias, full);
-      return this;
-    }
-
     public CommandPipeline<TResult> AddArgs(IReadOnlyList<string> args)
     {
       Args = args;
@@ -116,20 +104,17 @@ namespace Argumental
       return this;
     }
 
-    public CommandPipeline<TResult> AddHelpCommand(string name = null)
+    public CommandPipeline<TResult> AddHelpCommand(string name = null, string description = null)
     {
       name = string.IsNullOrEmpty(name) ? "help" : name;
-      SwitchMappings.Add("-?", "--" + name);
-      SwitchMappings.Add("-" + name.Substring(0, 1), "--" + name);
-      var helpCommand = new Command<TResult>(name)
+      description = "Show help and usage information";
+      SerializationInfo.HelpOption = new Property(new ConfigPath(new ConfigSection(name, description)), new BooleanType());
+      var helpCommand = new Command<TResult>(name, description)
       {
         AllowUnrecognizedTokens = true,
         Matcher = context =>
         {
-          var switches = new HashSet<string>(OptionComparer) { name };
-          switches.UnionWith(SwitchMappings
-            .Where(k => OptionComparer.Equals(k.Value, "--" + name))
-            .Select(k => k.Key.TrimStart('-', '/')));
+          var switches = new HashSet<string>(SerializationInfo.Aliases(SerializationInfo.HelpOption), SerializationInfo.OptionComparer);
           if (context.Tokens.Count > 0
             && context.Tokens[0].Type != TokenType.Key
             && string.Equals(context.Tokens[0].Value, name, StringComparison.OrdinalIgnoreCase))
@@ -170,21 +155,23 @@ namespace Argumental
       return this;
     }
 
-    public CommandPipeline<TResult> SetOptionComparer(IEqualityComparer<string> optionComparer)
+    public CommandPipeline<TResult> SetSerializationInfo(BaseCommandLineInfo metadata)
     {
-      OptionComparer = optionComparer;
+      SerializationInfo = metadata;
       return this;
     }
 
-    public CommandPipeline<TResult> AddVersionCommand(string name = null)
+    public CommandPipeline<TResult> AddVersionCommand(string name = null, string description = null)
     {
       name = name ?? "version";
-      var versionCommand = new Command<TResult>(name)
+      description = description ?? "Show version information";
+      SerializationInfo.VersionOption = new Property(new ConfigPath(new ConfigSection(name, description)), new BooleanType());
+      var versionCommand = new Command<TResult>(name, description)
       {
         AllowUnrecognizedTokens = true,
         Matcher = context =>
         {
-          if (context.Tokens.Any(t => t.Type == TokenType.Key && OptionComparer.Equals(t.Value, name)))
+          if (context.Tokens.Any(t => t.Type == TokenType.Key && SerializationInfo.OptionComparer.Equals(t.Value, name)))
           {
             context.Success = true;
             context.Tokens.Clear();
@@ -199,9 +186,12 @@ namespace Argumental
       return this;
     }
 
-    public static CommandPipeline<TResult> Default()
+    public static CommandPipeline<TResult> Default(Action<CommandLineInfo> configure = null)
     {
+      var metadata = new CommandLineInfo();
+      configure?.Invoke(metadata);
       return new CommandPipeline<TResult>()
+        .SetSerializationInfo(metadata)
         .AddHelpCommand()
         .AddVersionCommand();
     }

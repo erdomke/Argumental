@@ -58,9 +58,9 @@ namespace InjectingIOptions
       return CommandApp.Default()
         .Run(app =>
         {
-          var pipeline = CommandPipeline<IServiceRegistrar>.Default()
+          var pipeline = CommandPipeline<IServiceRegistrar>
+            .Default(m => m.AddAlias("-r", "--read"))
             .AddArgs(args)
-            .AddAlias("-r", "--read")
             .AddCommand("", c =>
             {
               c.RegisterImplementation<ICommand, OptionsCommand>(new OptionGroup<Options>());

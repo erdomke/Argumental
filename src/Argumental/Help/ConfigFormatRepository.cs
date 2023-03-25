@@ -1,9 +1,7 @@
 ﻿using Argumental.Help;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.IO;
 using System.Linq;
 
@@ -13,17 +11,11 @@ namespace Argumental
   {
     private readonly List<IHelpWriter> _writers = new List<IHelpWriter>();
 
-    public List<IConfigFormat> Formats { get; } = new List<IConfigFormat>();
+    private List<SerializationInfo> Formats { get; } = new List<SerializationInfo>();
 
-    public ConfigFormatRepository AddFormat<T>(Action<T> update) where T : IConfigFormat, new()
+    public ConfigFormatRepository AddFormat(SerializationInfo metadata)
     {
-      var existing = Formats.OfType<T>().FirstOrDefault();
-      if (existing == null)
-      {
-        existing = new T();
-        Formats.Add(existing);
-      }
-      update(existing);
+      Formats.Add(metadata);
       return this;
     }
 
@@ -33,14 +25,9 @@ namespace Argumental
       return this;
     }
 
-    public IEnumerable<ConfigProperty> GetProperties<T>(IEnumerable<IProperty> schemaProperties) where T : IConfigFormat
+    public T GetSerializationInfo<T>() where T : SerializationInfo
     {
-      var format = Formats.OfType<T>().FirstOrDefault();
-      if (format == null)
-        return Enumerable.Empty<ConfigProperty>();
-
-      return format.GetProperties(schemaProperties)
-        .Where(p => p.Property.Use < PropertyUse.Hidden);
+      return Formats.OfType<T>().LastOrDefault();
     }
 
     public void WriteError(TextWriter writer, CommandApp app, ConfigurationException exception)
@@ -48,7 +35,7 @@ namespace Argumental
       var context = new HelpContext()
       {
         App = app,
-        Formats = this,
+        ConfigFormats = this,
         Metadata = app.GetService<AssemblyMetadata>(),
         Section = exception.SelectedCommand == null ? HelpSection.Root : HelpSection.Command,
       };
@@ -63,32 +50,55 @@ namespace Argumental
     public static ConfigFormatRepository Default(IConfigurationBuilder builder)
     {
       var result = new ConfigFormatRepository()
-        .AddWriter(new DocOptWriter());
+        .AddWriter(new DocOptWriter())
+        .AddWriter(new DocbookWriter());
       if (builder != null)
       {
         foreach (var source in builder.Sources)
         {
           if (source is ICommandPipeline pipeline)
           {
-            result.AddFormat<CommandLineFormat>(f => f.AddConfiguration(pipeline.SwitchMappings, true
-              , pipeline.HelpCommand?.Name.First().ToString()
-              , pipeline.VersionCommand?.Name.First().ToString()));
+            result.AddFormat(pipeline.SerializationInfo);
           }
           else if (source.GetType().FullName == "Microsoft.Extensions.Configuration.CommandLine.CommandLineConfigurationSource")
           {
+            var metadata = new CommandLineInfo()
+            {
+              PosixConventions = false
+            };
             var mappings = (IDictionary<string, string>)source.GetType().GetProperty("SwitchMappings").GetValue(source);
-            result.AddFormat<CommandLineFormat>(f => f.AddConfiguration(mappings, false));
+            if (mappings != null)
+            {
+              foreach (var mapping in mappings)
+                metadata.AddAlias(mapping.Key, mapping.Value);
+            }
+            result.AddFormat(metadata);
           }
           else if (source.GetType().FullName == "Microsoft.Extensions.Configuration.EnvironmentVariables.EnvironmentVariablesConfigurationSource")
           {
             var prefix = (string)source.GetType().GetProperty("Prefix").GetValue(source);
-            result.AddFormat<EnvironmentVariableFormat>(f => f.Prefixes.Add(prefix));
+            var existing = result.Formats.OfType<EnvironmentVariableInfo>().FirstOrDefault();
+            if (existing == null)
+            {
+              existing = new EnvironmentVariableInfo();
+              result.AddFormat(existing);
+            }
+            existing.Prefixes.Add(prefix);
           }
           else if (source.GetType().FullName == "Microsoft.Extensions.Configuration.Json.JsonConfigurationSource")
           {
             var path = (string)source.GetType().GetProperty("Path").GetValue(source);
             if (!string.IsNullOrEmpty(path))
-              result.AddFormat<JsonFileFormat>(f => f.Paths.Add(path));
+            {
+              var existing = result.Formats.OfType<JsonSettingsInfo>().FirstOrDefault();
+              if (existing == null)
+              {
+                existing = new JsonSettingsInfo();
+                result.AddFormat(existing);
+                result.AddWriter(new JsonSchemaWriter());
+              }
+              existing.Paths.Add(path);
+            }
           }
         }
       }

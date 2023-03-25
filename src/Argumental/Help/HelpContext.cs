@@ -6,7 +6,7 @@ namespace Argumental
   {
     public CommandApp App { get; set; }
     public List<string> Errors { get; } = new List<string>();
-    public ConfigFormatRepository Formats { get; set; }
+    public ConfigFormatRepository ConfigFormats { get; set; }
     public int? MaxLineWidth { get; }
     public AssemblyMetadata Metadata { get; set; }
     public List<ISchemaProvider> Schemas { get; } = new List<ISchemaProvider>();

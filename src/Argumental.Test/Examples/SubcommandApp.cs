@@ -18,12 +18,10 @@ namespace SubcommandApp
               return Task.FromResult(0);
             }, new Option<string>("file", "The file to read and display on the console.")
             , new Option<int>("delay", "Delay between lines, specified as milliseconds per character in a line.")
-            {
-              DefaultValue = 42
-            }, new Option<ConsoleColor>("fgcolor", "Foreground color of text displayed on the console.")
-            {
-              DefaultValue = ConsoleColor.White
-            }, new Option<bool>("light-mode", "Background color of text displayed on the console: default is black, light mode is white."));
+              .SetDefaultValue(42)
+            , new Option<ConsoleColor>("fgcolor", "Foreground color of text displayed on the console.")
+              .SetDefaultValue(ConsoleColor.White)
+            , new Option<bool>("light-mode", "Background color of text displayed on the console: default is black, light mode is white."));
           })
           .Invoke());
     }

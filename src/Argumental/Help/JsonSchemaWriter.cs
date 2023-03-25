@@ -1,5 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using Argumental.Help;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.IO;
 using System.Linq;
@@ -15,20 +15,46 @@ namespace Argumental
     public void Write(HelpContext context, Stream stream)
     {
       var type = new ObjectType(context.Schemas.SelectMany(s => s.Properties));
+      var info = context.ConfigFormats.GetSerializationInfo<JsonSettingsInfo>();
+      using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions()
+      {
+        Indented = true
+      }))
+      {
+        writer.WriteStartObject();
+        writer.WriteString("$schema", "https://json-schema.org/draft/2020-12/schema");
+        if (!string.IsNullOrEmpty(context.Metadata.Name))
+          writer.WriteString("title", context.Metadata.Name);
+        if (!string.IsNullOrEmpty(context.Metadata.Description))
+          writer.WriteString("description", context.Metadata.Description);
+        if (!string.IsNullOrEmpty(context.Metadata.Copyright))
+          writer.WriteString("copyright", context.Metadata.Copyright);
+        if (!string.IsNullOrEmpty(context.Metadata.Version))
+          writer.WriteString("version", context.Metadata.Version);
+        Write(writer, info, type);
+        writer.WriteEndObject();
+      }
     }
 
-    private void Write(Utf8JsonWriter writer, IDataType type, IProperty property)
+    private void Write(Utf8JsonWriter writer, SerializationInfo info, IDataType type, IProperty property)
     {
       if (type is ObjectType objectType)
       {
-        Write(writer, objectType);
+        Write(writer, info, objectType);
       }
       else if (property.Type is ArrayType arrayType)
       {
         writer.WriteString("type", "array");
+        if (info.TryGetListLength(property, out var minLength, out var maxLength))
+        {
+          if (minLength.HasValue)
+            writer.WriteNumber("minItems", minLength.Value);
+          if (maxLength.HasValue)
+            writer.WriteNumber("maxItems", maxLength.Value);
+        }
         writer.WritePropertyName("items");
         writer.WriteStartObject();
-        Write(writer, arrayType.ValueType, null);
+        Write(writer, info, arrayType.ValueType, null);
         writer.WriteEndObject();
       }
       else if (property.Type is DictionaryType dictionaryType)
@@ -36,7 +62,7 @@ namespace Argumental
         writer.WriteString("type", "object");
         writer.WritePropertyName("additionalProperties");
         writer.WriteStartObject();
-        Write(writer, dictionaryType.ValueType, null);
+        Write(writer, info, dictionaryType.ValueType, null);
         writer.WriteEndObject();
       }
       else if (property.Type is StringType stringType)
@@ -46,29 +72,33 @@ namespace Argumental
         {
           if (property.Attributes.OfType<EmailAddressAttribute>().Any())
             writer.WriteString("format", "email");
-          var pattern = property.Attributes.OfType<RegularExpressionAttribute>().FirstOrDefault();
-          if (!string.IsNullOrEmpty(pattern?.Pattern))
-            writer.WriteString("pattern", pattern?.Pattern);
-          var length = property.Attributes.OfType<StringLengthAttribute>().FirstOrDefault();
-          //var minLength = property.Attributes.OfType<MinLengthAttribute>().FirstOrDefault();
-          if (length?.MinimumLength > 0)
-            writer.WriteNumber("minLength", length.MinimumLength);
-          if (length != null
-            && length.MaximumLength > 0
-            && length.MaximumLength < int.MaxValue)
-            writer.WriteNumber("maxLength", length.MaximumLength);
+          var pattern = info.RegularExpression(property);
+          if (!string.IsNullOrEmpty(pattern))
+            writer.WriteString("pattern", pattern);
+          if (info.TryGetStringLength(property, out var minLength, out var maxLength))
+          {
+            if (minLength.HasValue)
+              writer.WriteNumber("minLength", minLength.Value);
+            if (maxLength.HasValue)
+              writer.WriteNumber("maxLength", maxLength.Value);
+          }
         }
       }
       else if (property.Type is NumberType numberType)
       {
         writer.WriteString("type", numberType.IsInteger ? "integer" : "number");
-        var range = property?.Attributes.OfType<RangeAttribute>().FirstOrDefault();
-        if (range?.Minimum != null)
+        if (info.TryGetNumberRange(property, out var minimum, out var minExclusive, out var maximum, out var maxExclusive))
         {
-          writer.WritePropertyName("minimum");
-          JsonSerializer.Serialize(writer, range.Minimum);
-          writer.WritePropertyName("maximum");
-          JsonSerializer.Serialize(writer, range.Maximum);
+          if (minimum != null)
+          {
+            writer.WritePropertyName(minExclusive ? "exclusiveMinimum" : "minimum");
+            JsonSerializer.Serialize(writer, minimum);
+          }
+          if (maximum != null)
+          {
+            writer.WritePropertyName(maxExclusive ? "exclusiveMaximum" : "maximum");
+            JsonSerializer.Serialize(writer, maximum);
+          }
         }
       }
       else if (property.Type is BooleanType)
@@ -77,33 +107,33 @@ namespace Argumental
       }
     }
 
-    private void Write(Utf8JsonWriter writer, ObjectType objectType)
+    private void Write(Utf8JsonWriter writer, SerializationInfo info, ObjectType objectType)
     {
       writer.WriteString("type", "object");
       writer.WritePropertyName("properties");
       writer.WriteStartObject();
       foreach (var property in objectType.Properties
-        .Where(p => p.Use < PropertyUse.Hidden))
+        .Where(p => info.Use(p) < PropertyUse.Hidden))
       {
         writer.WritePropertyName(property.Name.ToString());
         writer.WriteStartObject();
 
-        Write(writer, property.Type, property);
+        Write(writer, info, property.Type, property);
         
-        var description = (property.Name.Last() as ConfigSection)?.Description
-          ?? property.Type.Name?.Description;
+        var description = info.Description(property);
         if (!string.IsNullOrEmpty(description))
           writer.WriteString("description", description);
-        if (property.DefaultValue != null)
+        var defaultValue = info.DefaultValue(property);
+        if (defaultValue != null)
         {
           writer.WritePropertyName("default");
-          JsonSerializer.Serialize(writer, property.DefaultValue);
+          JsonSerializer.Serialize(writer, defaultValue);
         }
         
         writer.WriteEndObject();
       }
       var required = objectType.Properties
-        .Where(p => p.Use == PropertyUse.Required)
+        .Where(p => info.Use(p) == PropertyUse.Required)
         .Select(p => p.Name.ToString())
         .ToList();
       if (required.Count > 0)
@@ -144,7 +174,63 @@ namespace Argumental
 
     public void Write(HelpContext context, TextWriter writer)
     {
-      throw new NotImplementedException();
+      Write(context, new WriterStream(writer));
+    }
+
+    private class WriterStream : Stream
+    {
+      private TextWriter _writer;
+
+      public override bool CanRead => false;
+
+      public override bool CanSeek => false;
+
+      public override bool CanWrite => true;
+
+      public override long Length => throw new NotSupportedException();
+
+      public override long Position 
+      { 
+        get => throw new NotSupportedException(); 
+        set => throw new NotSupportedException(); 
+      }
+
+      public WriterStream(TextWriter writer)
+      {
+        _writer = writer;
+      }
+
+      protected override void Dispose(bool disposing)
+      {
+        if (disposing)
+          _writer.Dispose();
+        base.Dispose(disposing);
+      }
+
+      public override void Flush()
+      {
+        _writer.Flush();
+      }
+
+      public override int Read(byte[] buffer, int offset, int count)
+      {
+        throw new NotSupportedException();
+      }
+
+      public override long Seek(long offset, SeekOrigin origin)
+      {
+        throw new NotSupportedException();
+      }
+
+      public override void SetLength(long value)
+      {
+        throw new NotSupportedException();
+      }
+
+      public override void Write(byte[] buffer, int offset, int count)
+      {
+        _writer.Write(Encoding.UTF8.GetChars(buffer, offset, count));
+      }
     }
   }
 }

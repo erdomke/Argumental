@@ -110,12 +110,12 @@ namespace Argumental
         , new XElement(DocbookSchema.arg, "options"));
       entry.Add(new XElement(DocbookSchema.refsynopsisdiv, synopsis));
 
-      var options = context.Formats.GetProperties<CommandLineFormat>(Array.Empty<IProperty>()).ToList();
-      if (options.Count > 0)
+      var commandMetadata = context.ConfigFormats.GetSerializationInfo<BaseCommandLineInfo>();
+      if (commandMetadata?.GlobalOptions().Any() == true)
       {
         var variableList = new XElement(DocbookSchema.variablelist);
-        foreach (var option in options)
-          variableList.Add(WriteOption(option));
+        foreach (var option in commandMetadata.GlobalOptions())
+          variableList.Add(WriteOption(commandMetadata, option));
         entry.Add(new XElement(DocbookSchema.refsection
           , new XElement(DocbookSchema.title, "Options")
           , variableList
@@ -173,17 +173,18 @@ namespace Argumental
       if (!string.IsNullOrEmpty(description))
         nameDiv.Add(new XElement(DocbookSchema.refpurpose, description));
 
-      if (command != null)
+      var commandMetadata = context.ConfigFormats.GetSerializationInfo<BaseCommandLineInfo>();
+      if (commandMetadata != null && command != null)
         result.Add(new XElement(DocbookSchema.refsynopsisdiv, WriteSynopsis(command, context)));
 
-      var options = context.Formats.GetProperties<CommandLineFormat>(schema.Properties)
-        .Where(p => !p.Property.IsPositional)
+      var options = commandMetadata.Flatten(schema.Properties)
+        .Concat(commandMetadata.GlobalOptions())
         .ToList();
       if (options.Count > 0)
       {
         var variableList = new XElement(DocbookSchema.variablelist);
         foreach (var option in options)
-          variableList.Add(WriteOption(option));
+          variableList.Add(WriteOption(commandMetadata, option));
         result.Add(new XElement(DocbookSchema.refsection
           , new XElement(DocbookSchema.title, "Options")
           , variableList
@@ -233,25 +234,24 @@ namespace Argumental
         ));
       }
 
-      var envVars = context.Formats.GetProperties<EnvironmentVariableFormat>(schema.Properties)
-        .Where(p => p.Property.Type.IsConvertibleFromString)
-        .ToList();
-      if (envVars.Count > 0)
+      var envVarMetadata = context.ConfigFormats.GetSerializationInfo<EnvironmentVariableInfo>();
+      var envVars = envVarMetadata?.Flatten(schema.Properties).ToList();
+      if (envVars?.Count > 0)
       {
         var variableList = new XElement(DocbookSchema.variablelist);
         foreach (var option in envVars)
-          variableList.Add(WriteOption(option));
+          variableList.Add(WriteOption(envVarMetadata, option));
         result.Add(new XElement(DocbookSchema.refsection
           , new XElement(DocbookSchema.title, "Environment")
           , variableList
         ));
       }
 
-      var jsonFiles = context.Formats.Formats.OfType<JsonFileFormat>().FirstOrDefault();
+      var jsonFiles = context.ConfigFormats.GetSerializationInfo<JsonSettingsInfo>();
       if (jsonFiles?.Paths.Count > 0)
       {
-        var jsonVars = context.Formats.GetProperties<JsonFileFormat>(schema.Properties)
-          .Where(p => p.Property.Type.IsConvertibleFromString)
+        var jsonVars = jsonFiles.Flatten(schema.Properties)
+          .Where(p => p.Type.IsConvertibleFromString)
           .ToList();
         var para = new XElement(DocbookSchema.para, "JSON: ");
         var first = true;
@@ -266,7 +266,7 @@ namespace Argumental
         }
         var variableList = new XElement(DocbookSchema.variablelist);
         foreach (var option in jsonVars)
-          variableList.Add(WriteOption(option));
+          variableList.Add(WriteOption(jsonFiles, option));
         result.Add(new XElement(DocbookSchema.refsection
           , new XElement(DocbookSchema.title, "Files")
           , para
@@ -279,6 +279,7 @@ namespace Argumental
 
     private XElement WriteSynopsis(ICommand command, HelpContext context)
     {
+      var commandMetadata = context.ConfigFormats.GetSerializationInfo<BaseCommandLineInfo>();
       var result = new XElement(DocbookSchema.cmdsynopsis
         , new XElement(DocbookSchema.command, context.Metadata.Name)
       );
@@ -288,20 +289,18 @@ namespace Argumental
       {
         result.Add(" ", new XElement(DocbookSchema.arg, part.Name, new XAttribute("choice", "plain")));
       }
-      foreach (var property in context.Formats
-        .GetProperties<CommandLineFormat>(command.Properties)
-        .Where(p => !p.IsGlobal))
+      foreach (var property in commandMetadata.Flatten(command.Properties))
       {
-        result.Add(" ", property.DocbookAliases.First());
+        result.Add(" ", commandMetadata.DocbookNames(property).First());
       }
 
       return result;
     }
 
-    private XElement WriteOption(ConfigProperty property)
+    private XElement WriteOption(SerializationInfo metadata, IProperty property)
     {
       var result = new XElement(DocbookSchema.varlistentry);
-      foreach (var alias in property.DocbookAliases)
+      foreach (var alias in metadata.DocbookNames(property))
       {
         var term = new XElement(DocbookSchema.term);
         if (alias.Name == DocbookSchema.arg)
@@ -315,13 +314,14 @@ namespace Argumental
       }
       
       var para = new XElement(DocbookSchema.para);
-      var description = property.Property.Name.OfType<ConfigSection>().LastOrDefault()?.Description;
+      var description = metadata.Description(property);
       if (!string.IsNullOrEmpty(description))
         para.Add(description);
-      if (property.Property.DefaultValue != null)
+      var defaultValue = metadata.DefaultValue(property);
+      if (defaultValue != null)
       {
         para.Add(" [default: ");
-        para.Add(new XElement(DocbookSchema.literal, property.Property.DefaultValue.ToString()));
+        para.Add(new XElement(DocbookSchema.literal, defaultValue.ToString()));
         para.Add("]");
       }
       result.Add(new XElement(DocbookSchema.listitem, para));

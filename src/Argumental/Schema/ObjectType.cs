@@ -18,8 +18,8 @@ namespace Argumental
       get
       {
         if (_properties == null)
-          _properties = Property.DefaultSort(GetAllProperties()
-            .Select(p => new Property(Array.Empty<IConfigSection>(), p)))
+          _properties = GetAllProperties()
+            .Select(p => new Property(Array.Empty<IConfigSection>(), p))
             .ToList();
         return _properties;
       }
@@ -35,7 +35,7 @@ namespace Argumental
 
     public ObjectType(IEnumerable<IProperty> properties)
     {
-      _properties = Property.DefaultSort(properties
+      _properties = properties
         .GroupBy(p => p.Name.First())
         .Select(g =>
         {
@@ -49,12 +49,12 @@ namespace Argumental
           {
             return g.First();
           }
-        }))
+        })
         .ToList();
       Type = typeof(object);
     }
 
-    public bool TryGetExample(IProperty property, out object example)
+    public bool TryGetExample(out object example)
     {
       throw new NotImplementedException();
     }

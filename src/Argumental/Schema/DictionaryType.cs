@@ -22,7 +22,7 @@ namespace Argumental
       ValueType = elementType;
     }
 
-    public bool TryGetExample(IProperty property, out object example)
+    public bool TryGetExample(out object example)
     {
       throw new NotImplementedException();
     }

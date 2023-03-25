@@ -22,10 +22,10 @@ namespace Argumental.Test
       Assert.AreEqual(@"Sample app for Argumental
 
 Usage:
-  scl --Read <Read>... [--Offset <Offset>] [--StdIn] [--Verbose]
+  scl -r <Read>... [--Offset <Offset>] [--StdIn] [--Verbose]
 
 Options:
-  --Read <Read>     Input files to be processed.
+  -r <Read>, --Read <Read>  Input files to be processed.
   --Offset <Offset> File offset.
   --StdIn           Read from stdin.
   --Verbose         Prints all messages to standard output.
@@ -73,7 +73,7 @@ Environment:
       Assert.AreEqual(@"Sample app for Argumental
 
 Usage:
-  scl [--Read:# <Read>] [--Offset <Offset>] [--StdIn <StdIn>]
+  scl --Read:# <Read> [--Offset <Offset>] [--StdIn <StdIn>]
     [--Verbose <Verbose>]
 
 Options:

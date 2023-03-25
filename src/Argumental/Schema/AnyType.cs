@@ -12,7 +12,7 @@ namespace Argumental
 
     public Type Type => typeof(object);
 
-    public bool TryGetExample(IProperty property, out object example)
+    public bool TryGetExample(out object example)
     {
       throw new NotImplementedException();
     }

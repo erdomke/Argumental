@@ -16,13 +16,9 @@ namespace Argumental
       Type = type ?? typeof(bool);
     }
 
-    public bool TryGetExample(IProperty property, out object example)
+    public bool TryGetExample(out object example)
     {
-      if (property.DefaultValue is bool boolean)
-        example = boolean;
-      else
-        example = true;
-      
+      example = true;
       return true;
     }
   }

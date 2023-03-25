@@ -31,45 +31,29 @@ namespace Argumental
         || type == typeof(ulong));
     }
 
-    public bool TryGetExample(IProperty property, out object example)
+    public bool TryGetExample(out object example)
     {
-      if (property.DefaultValue != null)
-        example = property.DefaultValue;
+      var minimum = IsSigned ? double.MinValue : 0.0;
+      var maximum = double.MaxValue;
+
+      if (minimum > double.MinValue && maximum < double.MaxValue)
+      {
+        example = Convert.ChangeType((maximum + minimum) / 2, Type);
+      }
+      else if (maximum < double.MaxValue)
+      {
+        if (maximum > 0)
+          example = Convert.ChangeType(maximum / 2, Type);
+        else
+          example = Convert.ChangeType(maximum - 3.14, Type);
+      }
+      else if (minimum > double.MinValue)
+      {
+        example = Convert.ChangeType(minimum + 3.14, Type);
+      }
       else
       {
-        var range = property.Attributes.OfType<RangeAttribute>().FirstOrDefault();
-        var minimum = range?.Minimum == null
-          ? (IsSigned ? double.MinValue : 0.0)
-          : Convert.ToDouble(range.Minimum);
-        var maximum = range?.Maximum == null
-          ? double.MaxValue
-          : Convert.ToDouble(range.Maximum);
-
-        if (minimum > double.MinValue && maximum < double.MaxValue)
-        {
-          example = Convert.ChangeType((maximum + minimum) / 2, Type);
-        }
-        else if (maximum < double.MaxValue)
-        {
-          if (maximum > 0)
-            example = Convert.ChangeType(maximum / 2, Type);
-          else
-            example = Convert.ChangeType(maximum - 3.14, Type);
-        }
-        else if (minimum > double.MinValue)
-        {
-          example = Convert.ChangeType(minimum + 3.14, Type);
-        }
-        else
-        {
-          example = Convert.ChangeType(3.14, Type);
-        }
-
-        if (!Validator.TryValidateValue(example
-          , new ValidationContext(this)
-          , null
-          , property.Attributes.OfType<ValidationAttribute>()))
-          return false;
+        example = Convert.ChangeType(3.14, Type);
       }
       return true;
     }

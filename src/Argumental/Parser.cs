@@ -24,8 +24,20 @@ namespace Argumental
 
     public Dictionary<string, string> Parse()
     {
-      var data = new Dictionary<string, string>(Pipeline.OptionComparer);
-      var tokens = Tokenize();
+      var data = new Dictionary<string, string>(Pipeline.SerializationInfo.OptionComparer);
+      var switchMappings = Pipeline.Commands
+        .SelectMany(c => c.Properties)
+        .Distinct()
+        .Select(p => Pipeline.SerializationInfo.Aliases(p))
+        .Where(a => a.Skip(1).Any())
+        .SelectMany(a =>
+        {
+          var name = a.First();
+          return a.Skip(1).Select(n => new KeyValuePair<string, string>((n.Length == 1 ? "-" : "--") + n, "--" + name));
+        })
+        .GroupBy(k => k.Key, Pipeline.SerializationInfo.OptionComparer)
+        .ToDictionary(g => g.Key, g => g.First().Value, Pipeline.SerializationInfo.OptionComparer);
+      var tokens = Tokenize(switchMappings);
       var allCommands = new List<ICommand>();
       if (Pipeline.HelpCommand != null)
         allCommands.Add(Pipeline.HelpCommand);
@@ -61,7 +73,10 @@ namespace Argumental
         }
         else if (tokens[i].Type == TokenType.Value)
         {
-          var prop = properties.Where(p => p.IsPositional).Skip(position).FirstOrDefault();
+          var prop = properties
+            .Where(p => Pipeline.SerializationInfo.IsPositional(p))
+            .Skip(position)
+            .FirstOrDefault();
           if (prop == null)
           {
             UnrecognizedTokens.Add("[Position " + position + "]");
@@ -86,7 +101,7 @@ namespace Argumental
         else // Key
         {
           var propName = tokens[i].Value;
-          var prop = properties.FirstOrDefault(p => Pipeline.OptionComparer.Equals(p.Name.ToString(), propName));
+          var prop = properties.FirstOrDefault(p => Pipeline.SerializationInfo.OptionComparer.Equals(Pipeline.SerializationInfo.Name(p), propName));
           if (i + 1 < tokens.Count && tokens[i + 1].Type == TokenType.Value)
           {
             if (prop != null && prop.Type is ArrayType)
@@ -118,7 +133,7 @@ namespace Argumental
       return data;
     }
 
-    public IReadOnlyList<Token> Tokenize()
+    public IReadOnlyList<Token> Tokenize(IDictionary<string, string> switchMappings)
     {
       var result = new List<Token>();
       for (var i = 0; i < Pipeline.Args.Count; i++)
@@ -158,14 +173,14 @@ namespace Argumental
           keySegment = currentArg.Substring(0, separator);
 
         // If the switch is a key in given switch mappings, interpret it
-        if (Pipeline.SwitchMappings.TryGetValue(keySegment, out string mappedKeySegment))
+        if (switchMappings.TryGetValue(keySegment, out string mappedKeySegment))
         {
           result.Add(new Token(TokenType.Key, mappedKeySegment.TrimStart('-', '/')));
         }
         else if (keyStartIndex == 1 && separator < 0)
         {
           var bundled = keySegment.Skip(1)
-            .Select(c => Pipeline.SwitchMappings.TryGetValue("-" + c, out var mapped) ? mapped : null)
+            .Select(c => switchMappings.TryGetValue("-" + c, out var mapped) ? mapped : null)
             .ToList();
           // Option bundling
           // git clean -f - d - x

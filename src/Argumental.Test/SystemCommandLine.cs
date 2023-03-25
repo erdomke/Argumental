@@ -85,7 +85,7 @@ Options:
                     [default: White]
   --file <file>     The file to read and display on the console.
   --light-mode      Background color of text displayed on the console: default
-                    is black, light mode is white. [default: False]
+                    is black, light mode is white.
   --version         Show version information
   -?, -h, --help    Show help and usage information
 
@@ -123,7 +123,7 @@ Options:
                     [default: White]
   --file <file>     The file to read and display on the console.
   --light-mode      Background color of text displayed on the console: default
-                    is black, light mode is white. [default: False]
+                    is black, light mode is white.
   --version         Show version information
   -?, -h, --help    Show help and usage information
 

@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Argumental
 {
@@ -9,6 +7,6 @@ namespace Argumental
     ConfigSection Name { get; }
     Type Type { get; }
     bool IsConvertibleFromString { get; }
-    bool TryGetExample(IProperty property, out object example);
+    bool TryGetExample(out object example);
   }
 }

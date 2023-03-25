@@ -16,12 +16,7 @@ namespace Argumental
 
     ICommand HelpCommand { get; }
 
-    IEqualityComparer<string> OptionComparer { get; }
-
-    /// <summary>
-    /// Gets or sets the switch mappings.
-    /// </summary>
-    IDictionary<string, string> SwitchMappings { get; }
+    BaseCommandLineInfo SerializationInfo { get; }
 
     ICommand VersionCommand { get; }
 

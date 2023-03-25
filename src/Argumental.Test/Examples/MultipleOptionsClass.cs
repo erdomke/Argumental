@@ -26,9 +26,9 @@ namespace MultipleOptionsClass
     public static int Main_(string[] args)
     {
       return CommandApp.Default()
-        .Run(app => CommandPipeline<int>.Default()
+        .Run(app => CommandPipeline<int>
+          .Default(m => m.AddAlias("-r", "--read"))
           .AddArgs(args)
-          .AddAlias("-r", "--read")
           .AddCommand("", c =>
           {
             c.SetHandler(o =>
