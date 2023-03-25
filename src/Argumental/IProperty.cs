@@ -7,11 +7,12 @@ namespace Argumental
   public interface IProperty
   {
     object DefaultValue { get; }
-    bool Hidden { get; }
+    PropertyUse Use { get; }
+    int Order { get; }
     bool IsPositional { get; }
     bool MaskValue { get; }
     ConfigPath Name { get; }
     IDataType Type { get; }
-    IEnumerable<ValidationAttribute> Validations { get; }
+    IEnumerable<Attribute> Attributes { get; }
   }
 }

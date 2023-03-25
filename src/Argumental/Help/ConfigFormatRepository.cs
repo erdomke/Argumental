@@ -39,10 +39,8 @@ namespace Argumental
       if (format == null)
         return Enumerable.Empty<ConfigProperty>();
 
-      return format.GetProperties(schemaProperties
-        .Where(p => !p.Hidden)
-        .OrderBy(p => p.IsRequired() && !p.IsPositional ? 0 : 1)
-        .ThenBy(p => p.IsPositional ? "" : p.Name.ToString(), StringComparer.OrdinalIgnoreCase));
+      return format.GetProperties(schemaProperties)
+        .Where(p => p.Property.Use < PropertyUse.Hidden);
     }
 
     public void WriteError(TextWriter writer, CommandApp app, ConfigurationException exception)

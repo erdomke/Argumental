@@ -13,7 +13,7 @@ namespace Argumental
     {
       var propList = new List<IProperty>();
       Property.FlattenList(Array.Empty<IConfigSection>(), properties, false, propList);
-      foreach (var property in propList)
+      foreach (var property in Property.DefaultSort(propList))
       {
         var fullName = string.Join("__", property.Name.Select(p => p.ToString())).ToUpperInvariant();
         yield return new ConfigProperty(Prefixes

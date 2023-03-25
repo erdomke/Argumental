@@ -6,6 +6,7 @@ namespace Argumental
 {
   public interface IDataType
   {
+    ConfigSection Name { get; }
     Type Type { get; }
     bool IsConvertibleFromString { get; }
     bool TryGetExample(IProperty property, out object example);

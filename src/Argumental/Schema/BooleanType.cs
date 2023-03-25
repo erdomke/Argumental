@@ -7,6 +7,7 @@ namespace Argumental
   partial class BooleanType : IDataType
   {
     public bool IsConvertibleFromString => true;
+    public ConfigSection Name => null;
     public Type Type { get; }
 
 

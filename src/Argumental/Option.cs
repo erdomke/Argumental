@@ -10,17 +10,15 @@ namespace Argumental
   {
     private bool _isPositional;
     private IDataType _type;
-    private List<ValidationAttribute> _validators = new List<ValidationAttribute>();
+    private List<Attribute> _attributes = new List<Attribute>();
 
     public T DefaultValue { get; set; }
 
     public ConfigPath Name { get; }
 
-    public bool Hidden { get; set; }
-
     public bool MaskValue { get; set; }
 
-    public IList<ValidationAttribute> Validations => _validators;
+    public IList<Attribute> Attributes => _attributes;
 
     public IEnumerable<IProperty> Properties
     {
@@ -39,7 +37,11 @@ namespace Argumental
 
     IDataType IProperty.Type => _type;
 
-    IEnumerable<ValidationAttribute> IProperty.Validations => _validators;
+    IEnumerable<Attribute> IProperty.Attributes => _attributes;
+
+    public PropertyUse Use { get; set; }
+
+    public int Order { get; set; }
 
     public Option(string name, string description = null, bool isPositional = false)
       : this(new ConfigSection(name, description))
@@ -62,13 +64,12 @@ namespace Argumental
       if (_type.IsConvertibleFromString)
       {
         try
-        {
-          
+        {   
           var value = context.Configuration.GetValue(Name.ToString(), DefaultValue);
           if (!Validator.TryValidateValue(value, new ValidationContext(this)
           {
             MemberName = Name.ToString(),
-          }, validationResults, Validations))
+          }, validationResults, Attributes.OfType<ValidationAttribute>()))
             context.AddErrors(validationResults);
           return value;
         }

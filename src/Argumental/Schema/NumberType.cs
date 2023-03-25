@@ -10,8 +10,8 @@ namespace Argumental
     public bool IsConvertibleFromString => true;
     public bool IsInteger { get; }
     public bool IsSigned { get; }
+    public ConfigSection Name => null;
     public Type Type { get; }
-
 
     public NumberType(Type type)
     {
@@ -37,7 +37,7 @@ namespace Argumental
         example = property.DefaultValue;
       else
       {
-        var range = property.Validations.OfType<RangeAttribute>().FirstOrDefault();
+        var range = property.Attributes.OfType<RangeAttribute>().FirstOrDefault();
         var minimum = range?.Minimum == null
           ? (IsSigned ? double.MinValue : 0.0)
           : Convert.ToDouble(range.Minimum);
@@ -65,7 +65,10 @@ namespace Argumental
           example = Convert.ChangeType(3.14, Type);
         }
 
-        if (!Validator.TryValidateValue(example, new ValidationContext(this), null, property.Validations))
+        if (!Validator.TryValidateValue(example
+          , new ValidationContext(this)
+          , null
+          , property.Attributes.OfType<ValidationAttribute>()))
           return false;
       }
       return true;

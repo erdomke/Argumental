@@ -6,6 +6,7 @@ namespace Argumental
 {
   public class ArrayType : IDataType
   {
+    public ConfigSection Name { get; }
     public bool IsConvertibleFromString => Type == typeof(byte[]);
     public Type Type { get; }
     public IDataType ValueType { get; }
@@ -13,6 +14,8 @@ namespace Argumental
     public ArrayType(Type type, IDataType valueType)
     {
       Type = type;
+      if (!type.FullName.StartsWith("System.Collections") && !type.IsArray)
+        Name = Reflection.GetName(type);
       ValueType = valueType;
     }
 

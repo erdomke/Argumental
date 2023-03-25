@@ -47,7 +47,8 @@ namespace Argumental
     {
       var propList = new List<IProperty>();
       Property.FlattenList(Array.Empty<IConfigSection>(), properties, PosixConventions, propList);
-      
+      propList = Property.DefaultSort(propList).ToList();
+
       var globalStart = propList.Count;
       if (!string.IsNullOrEmpty(_versionName))
         propList.Add(new Property(new ConfigPath(new ConfigSection(_versionName, "Show version information")), new BooleanType()));

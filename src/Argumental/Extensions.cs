@@ -14,7 +14,7 @@ namespace Argumental
 
     public static bool IsRequired(this IProperty property)
     {
-      return property.Validations.OfType<RequiredAttribute>().Any();
+      return property.Attributes.OfType<RequiredAttribute>().Any();
     }
 
     public static bool TryFindIndex(this string value, string substring, out int index)

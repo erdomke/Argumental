@@ -6,6 +6,8 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Reflection;
 using System.Security;
+using System.Text.Json.Serialization;
+using System.Xml.Serialization;
 
 namespace Argumental
 {
@@ -17,7 +19,7 @@ namespace Argumental
 
     public IDataType Type { get; }
 
-    public IEnumerable<ValidationAttribute> Validations { get; }
+    public IEnumerable<Attribute> Attributes { get; }
 
     public bool Hidden { get; set; }
 
@@ -25,36 +27,61 @@ namespace Argumental
 
     public object DefaultValue { get; set; }
 
+    public PropertyUse Use { get; set; }
+
+    public int Order { get; set; }
+    
     public Property(ConfigPath path, IDataType type)
     {
       Name = path;
       Type = type;
-      Validations = Array.Empty<ValidationAttribute>();
+      Attributes = Array.Empty<Attribute>();
     }
 
     public Property(ConfigPath newName, IProperty clone)
     {
+      Attributes = clone.Attributes;
       DefaultValue = clone.DefaultValue;
-      Hidden = clone.Hidden;
       MaskValue = clone.MaskValue;
       Name = newName;
+      Order = clone.Order;
       Type = clone.Type;
-      Validations = clone.Validations;
+      Use = clone.Use;
     }
 
     public Property(IEnumerable<IConfigSection> parents, PropertyInfo property)
     {
-      var configKey = property.GetCustomAttribute<ConfigurationKeyNameAttribute>();
-      var displayAttr = property.GetCustomAttribute<DisplayAttribute>();
-      var descripAttr = property.GetCustomAttribute<DescriptionAttribute>();
-      var browsable = property.GetCustomAttribute<BrowsableAttribute>();
-      var editorBrowsable = property.GetCustomAttribute<EditorBrowsableAttribute>();
-      var password = property.GetCustomAttribute<PasswordPropertyTextAttribute>();
-      var dataFormat = property.GetCustomAttribute<DataTypeAttribute>();
-      var defaultValue = property.GetCustomAttribute<DefaultValueAttribute>();
+      var attributes = property.GetCustomAttributes().ToList();
+      var configKey = attributes.OfType<ConfigurationKeyNameAttribute>().FirstOrDefault();
+      var displayAttr = attributes.OfType<DisplayAttribute>().FirstOrDefault();
+      var descripAttr = attributes.OfType<DescriptionAttribute>().FirstOrDefault();
+      var password = attributes.OfType<PasswordPropertyTextAttribute>().FirstOrDefault();
+      var dataFormat = attributes.OfType<DataTypeAttribute>().FirstOrDefault();
+      var defaultValue = attributes.OfType<DefaultValueAttribute>().FirstOrDefault();
 
       if (!Reflection.TryGetDataType(property.PropertyType, out var dataType))
         dataType = new ObjectType(property.PropertyType);
+
+      if (attributes.Any(a => a is RequiredAttribute
+        || a.GetType().FullName == "System.Runtime.CompilerServices.RequiredMemberAttribute"
+        || a.GetType().FullName == "System.Text.Json.Serialization.JsonRequiredAttribute"))
+        Use = PropertyUse.Required;
+      else if (attributes.OfType<ObsoleteAttribute>().Any(a => a.IsError))
+        Use = PropertyUse.Prohibited;
+      else if (attributes.OfType<ObsoleteAttribute>().Any())
+        Use = PropertyUse.Obsolete;
+      else if (attributes.OfType<BrowsableAttribute>().Any(a => !a.Browsable)
+        || attributes.OfType<EditorBrowsableAttribute>().Any(a => a.State == EditorBrowsableState.Never)
+        || attributes.Any(a => a is JsonIgnoreAttribute || a is XmlIgnoreAttribute))
+        Use = PropertyUse.Hidden;
+      else
+        Use = PropertyUse.Optional;
+
+      if (displayAttr != null && displayAttr.GetOrder().HasValue)
+        Order = displayAttr.GetOrder().Value;
+      else
+        Order = attributes.OfType<JsonPropertyOrderAttribute>()
+          .FirstOrDefault()?.Order ?? 0;
 
       Name = new ConfigPath(parents)
       {
@@ -68,10 +95,8 @@ namespace Argumental
         || password?.Password == true
         || dataFormat?.DataType == DataType.Password
         || dataFormat?.DataType == DataType.CreditCard;
-      Hidden = browsable?.Browsable == false
-        || editorBrowsable?.State == EditorBrowsableState.Never;
       Type = dataType;
-      Validations = property.GetCustomAttributes().OfType<ValidationAttribute>().ToList();
+      Attributes = attributes;
     }
 
     internal static void FlattenList(IEnumerable<IConfigSection> path
@@ -126,11 +151,20 @@ namespace Argumental
 
           result.Add(new Property(newPath, valueType)
           {
-            Hidden = property.Hidden,
+            Use = property.Use,
+            Order = property.Order,
             MaskValue = property.MaskValue
-          });
+          }) ;
         }
       }
+    }
+
+    internal static IEnumerable<IProperty> DefaultSort(IEnumerable<IProperty> properties)
+    {
+      return properties //.OrderBy(p => string.Join(".", p.Name.Take(p.Name.Count - 1)), StringComparer.OrdinalIgnoreCase)
+        .OrderBy(p => p.Use == PropertyUse.Required ? -1 : (int)p.Use)
+        .ThenBy(p => p.Order)
+        .ThenBy(p => p.Name.Last().ToString(), StringComparer.OrdinalIgnoreCase);
     }
   }
 }

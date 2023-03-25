@@ -13,7 +13,7 @@ namespace Argumental.Help
     {
       var propList = new List<IProperty>();
       Property.FlattenList(Array.Empty<IConfigSection>(), properties, false, propList);
-      foreach (var property in propList)
+      foreach (var property in Property.DefaultSort(propList))
       {
         var name = new XElement(DocbookSchema.code, "$");
         foreach (var part in property.Name)

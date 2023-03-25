@@ -8,9 +8,11 @@ namespace Argumental
 {
   public class StringType : IDataType
   {
-    public bool IsConvertibleFromString => true;
     public IEnumerable<EnumerationValue> Enumeration { get; }
+    public bool IsConvertibleFromString => true;
+    public ConfigSection Name { get; }
     public Type Type { get; }
+
 
     public StringType(Type type = null)
     {
@@ -20,6 +22,7 @@ namespace Argumental
         Enumeration = type.GetFields(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
           .Select(f => new EnumerationValue(f))
           .ToList();
+        Name = Reflection.GetName(Type);
       }
       else
       {
@@ -34,16 +37,16 @@ namespace Argumental
         example = property.DefaultValue.ToString();
       else if (Type == typeof(DateTime)
         || Type == typeof(DateTimeOffset)
-        || property.Validations.OfType<DataTypeAttribute>().Any(d => d.DataType == DataType.DateTime))
+        || property.Attributes.OfType<DataTypeAttribute>().Any(d => d.DataType == DataType.DateTime))
         example = "2012-03-14T13:30:55";
       else if (Type.FullName == "System.DateOnly"
-        || property.Validations.OfType<DataTypeAttribute>().Any(d => d.DataType == DataType.Date))
+        || property.Attributes.OfType<DataTypeAttribute>().Any(d => d.DataType == DataType.Date))
         example = "2012-03-14";
       else if (Type.FullName == "System.TimeOnly"
-        || property.Validations.OfType<DataTypeAttribute>().Any(d => d.DataType == DataType.Time))
+        || property.Attributes.OfType<DataTypeAttribute>().Any(d => d.DataType == DataType.Time))
         example = "13:30:55";
       else if (Type == typeof(TimeSpan)
-        || property.Validations.OfType<DataTypeAttribute>().Any(d => d.DataType == DataType.Duration))
+        || property.Attributes.OfType<DataTypeAttribute>().Any(d => d.DataType == DataType.Duration))
         example = "14.13:30:55.600";
       else if (Enumeration.Any())
       {
@@ -53,17 +56,17 @@ namespace Argumental
         example = result;
       }
       else if (Type == typeof(Uri) 
-        || property.Validations.OfType<DataTypeAttribute>().Any(d => d.DataType == DataType.Url))
+        || property.Attributes.OfType<DataTypeAttribute>().Any(d => d.DataType == DataType.Url))
         example = "https://www.example.com";
-      else if (property.Validations.OfType<DataTypeAttribute>().Any(d => d.DataType == DataType.PhoneNumber))
+      else if (property.Attributes.OfType<DataTypeAttribute>().Any(d => d.DataType == DataType.PhoneNumber))
         example = "+15555555555";
-      else if (property.Validations.OfType<DataTypeAttribute>().Any(d => d.DataType == DataType.EmailAddress))
+      else if (property.Attributes.OfType<DataTypeAttribute>().Any(d => d.DataType == DataType.EmailAddress))
         example = property.Name.OfType<ConfigSection>().Last().Name + "@example.com";
-      else if (property.Validations.OfType<DataTypeAttribute>().Any(d => d.DataType == DataType.CreditCard))
+      else if (property.Attributes.OfType<DataTypeAttribute>().Any(d => d.DataType == DataType.CreditCard))
         example = "5555555555555555";
       else
       {
-        var fileExtensions = property.Validations.OfType<FileExtensionsAttribute>().FirstOrDefault();
+        var fileExtensions = property.Attributes.OfType<FileExtensionsAttribute>().FirstOrDefault();
         if (fileExtensions != null)
         {
           example = property.Name.OfType<ConfigSection>().Last().Name + "." + fileExtensions.Extensions.Split(',')[0].TrimStart('.');
@@ -71,7 +74,10 @@ namespace Argumental
         else
         {
           example = property.Name.OfType<ConfigSection>().Last().Name;
-          if (!Validator.TryValidateValue(example, new ValidationContext(this), null, property.Validations))
+          if (!Validator.TryValidateValue(example
+            , new ValidationContext(this)
+            , null
+            , property.Attributes.OfType<ValidationAttribute>()))
             return false;
         }
       }

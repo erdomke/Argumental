@@ -1,8 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Numerics;
+using System.Reflection;
+using System.Xml.Linq;
 
 namespace Argumental
 {
@@ -16,6 +19,15 @@ namespace Argumental
         yield return curr;
         curr = curr.BaseType;
       }
+    }
+
+    public static ConfigSection GetName(Type type)
+    {
+      var result = new ConfigSection(type.FullName);
+      var displayAttr = type.GetCustomAttribute<DisplayAttribute>();
+      var descripAttr = type.GetCustomAttribute<DescriptionAttribute>();
+      result.Description = displayAttr?.Description ?? descripAttr?.Description;
+      return result;
     }
 
     public static bool TryGetDataType(Type type, out IDataType dataType)
