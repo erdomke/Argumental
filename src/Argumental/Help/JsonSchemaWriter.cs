@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace Argumental
 {
@@ -67,11 +68,15 @@ namespace Argumental
       }
       else if (property.Type is StringType stringType)
       {
-        Write(writer, stringType);
-        if (property != null)
+        writer.WriteString("type", "string");
+        var format = DataType.Custom;
+        if (property == null)
         {
-          if (property.Attributes.OfType<EmailAddressAttribute>().Any())
-            writer.WriteString("format", "email");
+          format = info.StringFormat(stringType);
+        }
+        else if (property != null)
+        {
+          format = info.StringFormat(property);
           var pattern = info.RegularExpression(property);
           if (!string.IsNullOrEmpty(pattern))
             writer.WriteString("pattern", pattern);
@@ -82,6 +87,43 @@ namespace Argumental
             if (maxLength.HasValue)
               writer.WriteNumber("maxLength", maxLength.Value);
           }
+        }
+
+        switch (format)
+        {
+          case DataType.Date:
+            writer.WriteString("format", "date");
+            break;
+          case DataType.DateTime:
+            writer.WriteString("format", "date-time");
+            break;
+          case DataType.Duration:
+            writer.WriteString("format", "duration");
+            break;
+          case DataType.EmailAddress:
+            writer.WriteString("format", "email");
+            break;
+          case DataType.Time:
+            writer.WriteString("format", "time");
+            break;
+          case DataType.Url:
+            writer.WriteString("format", "uri");
+            break;
+          default:
+            if (stringType.Type == typeof(Guid))
+              writer.WriteString("format", "uuid");
+            else if (stringType.Type == typeof(Regex))
+              writer.WriteString("format", "regex");
+            break;
+        }
+
+        if (info.TryGetEnumeration(property, out var allowMultiple, out var values))
+        {
+          writer.WritePropertyName("enum");
+          JsonSerializer.Serialize(values
+            .Where(e => !e.Hidden)
+            .Select(e => e.Name)
+            .ToList());
         }
       }
       else if (property.Type is NumberType numberType)
@@ -146,30 +188,6 @@ namespace Argumental
       }
       writer.WriteBoolean("additionalProperties", false);
       writer.WriteEndObject();
-    }
-
-    private void Write(Utf8JsonWriter writer, StringType stringType)
-    {
-      writer.WriteString("type", "string");
-      if (stringType.Type == typeof(DateTime)
-        || stringType.Type == typeof(DateTimeOffset))
-        writer.WriteString("format", "date-time");
-      else if (stringType.Type.FullName == "System.DateOnly")
-        writer.WriteString("format", "date");
-      else if (stringType.Type.FullName == "System.TimeOnly")
-        writer.WriteString("format", "time");
-      else if (stringType.Type == typeof(TimeSpan))
-        writer.WriteString("format", "duration");
-      else if (stringType.Type == typeof(Uri))
-        writer.WriteString("format", "uri");
-      if (stringType.Enumeration?.Any() == true)
-      {
-        writer.WritePropertyName("enum");
-        writer.WriteStartArray();
-        foreach (var value in stringType.Enumeration.Where(v => !v.Hidden))
-          writer.WriteStringValue(value.Value.ToString());
-        writer.WriteEndArray();
-      }
     }
 
     public void Write(HelpContext context, TextWriter writer)

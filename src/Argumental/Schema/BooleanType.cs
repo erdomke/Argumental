@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Argumental
 {
@@ -14,12 +12,6 @@ namespace Argumental
     public BooleanType(Type type = null)
     {
       Type = type ?? typeof(bool);
-    }
-
-    public bool TryGetExample(out object example)
-    {
-      example = true;
-      return true;
     }
   }
 }

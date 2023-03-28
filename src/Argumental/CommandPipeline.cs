@@ -22,7 +22,7 @@ namespace Argumental
 
     public ICommand VersionCommand { get; private set; }
 
-    public BaseCommandLineInfo SerializationInfo { get; private set; }
+    public CommandLineInfo SerializationInfo { get; private set; }
 
     public CommandPipeline()
     {
@@ -134,6 +134,7 @@ namespace Argumental
         }
       };
       var commandNameOpt = new Option<List<string>>("command", isPositional: true);
+      
       helpCommand.Providers.Add(commandNameOpt);
       helpCommand.Handler = (ctx) =>
       {
@@ -155,7 +156,7 @@ namespace Argumental
       return this;
     }
 
-    public CommandPipeline<TResult> SetSerializationInfo(BaseCommandLineInfo metadata)
+    public CommandPipeline<TResult> SetSerializationInfo(CommandLineInfo metadata)
     {
       SerializationInfo = metadata;
       return this;
@@ -188,7 +189,10 @@ namespace Argumental
 
     public static CommandPipeline<TResult> Default(Action<CommandLineInfo> configure = null)
     {
-      var metadata = new CommandLineInfo();
+      var metadata = new CommandLineInfo()
+      {
+        PosixConventions = true
+      };
       configure?.Invoke(metadata);
       return new CommandPipeline<TResult>()
         .SetSerializationInfo(metadata)

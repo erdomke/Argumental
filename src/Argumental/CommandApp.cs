@@ -32,7 +32,7 @@ namespace Argumental
     public CommandApp(AssemblyMetadata metadata)
     {
       AddSingleton(metadata);
-      AddTransient(s => ConfigFormatRepository.Default(s.GetService<IConfigurationBuilder>()));
+      AddTransient(s => DocumentationBuilder.Default(s.GetService<IConfigurationBuilder>()));
       AddTransient(s => s.GetService<ICommandPipeline>()?.ConfigurationBuilder);
     }
 
@@ -162,7 +162,7 @@ namespace Argumental
             a.AddSingleton(e.Pipeline);
           if (e.ConfigurationBuilder != null)
             a.AddSingleton(e.ConfigurationBuilder);
-          a.GetService<ConfigFormatRepository>().WriteError(writer, a, e);
+          a.GetService<DocumentationBuilder>().WriteError(writer, a, e);
         })
         .AddHandler<OptionsValidationException>(ExitCode.UsageError, (e, a) =>
         {
@@ -171,7 +171,7 @@ namespace Argumental
           {
             Pipeline = pipeline
           };
-          a.GetService<ConfigFormatRepository>().WriteError(writer, a, configEx);
+          a.GetService<DocumentationBuilder>().WriteError(writer, a, configEx);
         })
         .AddHandler<Exception>(ExitCode.Failure, (e, _) =>
         {

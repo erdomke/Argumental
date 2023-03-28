@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Argumental
 {
@@ -20,11 +18,6 @@ namespace Argumental
         Name = Reflection.GetName(type);
       KeyType = keyType;
       ValueType = elementType;
-    }
-
-    public bool TryGetExample(out object example)
-    {
-      throw new NotImplementedException();
     }
   }
 }

@@ -1,25 +1,39 @@
 ﻿using Argumental.Help;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
 namespace Argumental
 {
-  public class ConfigFormatRepository
+  public class DocumentationBuilder // : IConfigurationBuilder
   {
     private readonly List<IHelpWriter> _writers = new List<IHelpWriter>();
+    //private IConfigurationBuilder _builder;
 
     private List<SerializationInfo> Formats { get; } = new List<SerializationInfo>();
 
-    public ConfigFormatRepository AddFormat(SerializationInfo metadata)
+    public DocumentationBuilder AddSerialization(SerializationInfo info)
     {
-      Formats.Add(metadata);
+      Formats.Add(info);
       return this;
     }
 
-    public ConfigFormatRepository AddWriter(IHelpWriter writer)
+    public DocumentationBuilder AddOrUpdateSerialization<T>(Action<T> update) where T : SerializationInfo, new()
+    {
+      var existing = Formats.OfType<T>().FirstOrDefault();
+      if (existing == null)
+      {
+        existing = new T();
+        Formats.Add(existing);
+      }
+      update(existing);
+      return this;
+    }
+
+    public DocumentationBuilder AddWriter(IHelpWriter writer)
     {
       _writers.Add(writer);
       return this;
@@ -37,7 +51,7 @@ namespace Argumental
         App = app,
         ConfigFormats = this,
         Metadata = app.GetService<AssemblyMetadata>(),
-        Section = exception.SelectedCommand == null ? HelpSection.Root : HelpSection.Command,
+        Section = exception.SelectedCommand == null ? DocumentationScope.Root : DocumentationScope.Command,
       };
       context.Errors.AddRange(exception.Errors);
       if (exception.SelectedCommand != null)
@@ -47,9 +61,9 @@ namespace Argumental
       _writers.First().Write(context, writer);
     }
 
-    public static ConfigFormatRepository Default(IConfigurationBuilder builder)
+    public static DocumentationBuilder Default(IConfigurationBuilder builder)
     {
-      var result = new ConfigFormatRepository()
+      var result = new DocumentationBuilder()
         .AddWriter(new DocOptWriter())
         .AddWriter(new DocbookWriter());
       if (builder != null)
@@ -58,32 +72,24 @@ namespace Argumental
         {
           if (source is ICommandPipeline pipeline)
           {
-            result.AddFormat(pipeline.SerializationInfo);
+            result.AddSerialization(pipeline.SerializationInfo);
           }
           else if (source.GetType().FullName == "Microsoft.Extensions.Configuration.CommandLine.CommandLineConfigurationSource")
           {
-            var metadata = new CommandLineInfo()
+            result.AddOrUpdateSerialization<CommandLineInfo>(c =>
             {
-              PosixConventions = false
-            };
-            var mappings = (IDictionary<string, string>)source.GetType().GetProperty("SwitchMappings").GetValue(source);
-            if (mappings != null)
-            {
-              foreach (var mapping in mappings)
-                metadata.AddAlias(mapping.Key, mapping.Value);
-            }
-            result.AddFormat(metadata);
+              var mappings = (IDictionary<string, string>)source.GetType().GetProperty("SwitchMappings").GetValue(source);
+              if (mappings != null)
+              {
+                foreach (var mapping in mappings)
+                  c.AddAlias(mapping.Key, mapping.Value);
+              }
+            });
           }
           else if (source.GetType().FullName == "Microsoft.Extensions.Configuration.EnvironmentVariables.EnvironmentVariablesConfigurationSource")
           {
             var prefix = (string)source.GetType().GetProperty("Prefix").GetValue(source);
-            var existing = result.Formats.OfType<EnvironmentVariableInfo>().FirstOrDefault();
-            if (existing == null)
-            {
-              existing = new EnvironmentVariableInfo();
-              result.AddFormat(existing);
-            }
-            existing.Prefixes.Add(prefix);
+            result.AddOrUpdateSerialization<EnvironmentVariableInfo>(e => e.Prefixes.Add(prefix));
           }
           else if (source.GetType().FullName == "Microsoft.Extensions.Configuration.Json.JsonConfigurationSource")
           {
@@ -94,7 +100,7 @@ namespace Argumental
               if (existing == null)
               {
                 existing = new JsonSettingsInfo();
-                result.AddFormat(existing);
+                result.AddSerialization(existing);
                 result.AddWriter(new JsonSchemaWriter());
               }
               existing.Paths.Add(path);
@@ -104,5 +110,22 @@ namespace Argumental
       }
       return result;
     }
+
+    //#region "IConfigurationBuilder"
+    //IDictionary<string, object> IConfigurationBuilder.Properties => _builder.Properties;
+
+    //IList<IConfigurationSource> IConfigurationBuilder.Sources => _builder.Sources;
+
+    //IConfigurationBuilder IConfigurationBuilder.Add(IConfigurationSource source)
+    //{
+    //  _builder.Add(source);
+    //  return this;
+    //}
+
+    //IConfigurationRoot IConfigurationBuilder.Build()
+    //{
+    //  return _builder.Build();
+    //}
+    //#endregion
   }
 }

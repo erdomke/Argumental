@@ -11,10 +11,5 @@ namespace Argumental
     public ConfigSection Name => null;
 
     public Type Type => typeof(object);
-
-    public bool TryGetExample(out object example)
-    {
-      throw new NotImplementedException();
-    }
   }
 }

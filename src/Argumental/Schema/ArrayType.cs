@@ -18,10 +18,5 @@ namespace Argumental
         Name = Reflection.GetName(type);
       ValueType = valueType;
     }
-
-    public bool TryGetExample(out object example)
-    {
-      throw new NotImplementedException();
-    }
   }
 }

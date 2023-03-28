@@ -71,11 +71,11 @@ namespace Argumental
       {
         root.Add(WriteCommandEntry(command, context));
       }
-      else if (context.Section == HelpSection.Root)
+      else if (context.Section == DocumentationScope.Root)
       {
         root.Add(WriteSummaryEntry(context));
       }
-      else if (context.Section == HelpSection.Command
+      else if (context.Section == DocumentationScope.Command
         && context.Schemas.Count > 0)
       {
         root.Add(WriteCommandEntry(context.Schemas[0], context));
@@ -110,7 +110,7 @@ namespace Argumental
         , new XElement(DocbookSchema.arg, "options"));
       entry.Add(new XElement(DocbookSchema.refsynopsisdiv, synopsis));
 
-      var commandMetadata = context.ConfigFormats.GetSerializationInfo<BaseCommandLineInfo>();
+      var commandMetadata = context.ConfigFormats.GetSerializationInfo<CommandLineInfo>();
       if (commandMetadata?.GlobalOptions().Any() == true)
       {
         var variableList = new XElement(DocbookSchema.variablelist);
@@ -173,7 +173,7 @@ namespace Argumental
       if (!string.IsNullOrEmpty(description))
         nameDiv.Add(new XElement(DocbookSchema.refpurpose, description));
 
-      var commandMetadata = context.ConfigFormats.GetSerializationInfo<BaseCommandLineInfo>();
+      var commandMetadata = context.ConfigFormats.GetSerializationInfo<CommandLineInfo>();
       if (commandMetadata != null && command != null)
         result.Add(new XElement(DocbookSchema.refsynopsisdiv, WriteSynopsis(command, context)));
 
@@ -279,7 +279,7 @@ namespace Argumental
 
     private XElement WriteSynopsis(ICommand command, HelpContext context)
     {
-      var commandMetadata = context.ConfigFormats.GetSerializationInfo<BaseCommandLineInfo>();
+      var commandMetadata = context.ConfigFormats.GetSerializationInfo<CommandLineInfo>();
       var result = new XElement(DocbookSchema.cmdsynopsis
         , new XElement(DocbookSchema.command, context.Metadata.Name)
       );

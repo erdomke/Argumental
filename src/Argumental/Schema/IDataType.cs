@@ -7,6 +7,5 @@ namespace Argumental
     ConfigSection Name { get; }
     Type Type { get; }
     bool IsConvertibleFromString { get; }
-    bool TryGetExample(out object example);
   }
 }

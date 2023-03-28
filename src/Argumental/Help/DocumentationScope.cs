@@ -1,6 +1,6 @@
 ﻿namespace Argumental
 {
-  public enum HelpSection
+  public enum DocumentationScope
   {
     Root,
     Command,

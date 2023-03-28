@@ -54,11 +54,6 @@ namespace Argumental
       Type = typeof(object);
     }
 
-    public bool TryGetExample(out object example)
-    {
-      throw new NotImplementedException();
-    }
-
     private IEnumerable<PropertyInfo> GetAllProperties()
     {
       var baseType = Type;

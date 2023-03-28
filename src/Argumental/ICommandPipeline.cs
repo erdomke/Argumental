@@ -16,7 +16,7 @@ namespace Argumental
 
     ICommand HelpCommand { get; }
 
-    BaseCommandLineInfo SerializationInfo { get; }
+    CommandLineInfo SerializationInfo { get; }
 
     ICommand VersionCommand { get; }
 
