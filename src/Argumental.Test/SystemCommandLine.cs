@@ -70,24 +70,38 @@ Options:
   -?, -h, --help    Show help and usage information
 
 Commands:
-  read              Read and display the file.", result.Out.ToString()?.TrimEnd());
+  read              Read and display the file.
+
+Exit Status:
+  0                 The application successfully completed.
+  1                 The application failed with a general error.
+  64                The number or syntax of the arguments passed to the command
+                    is incorrect.
+  66                An input file does not exist or is not readable.
+  74                An error occurred while doing I/O on a file.
+  75                A temporary failure occurred. Please try again.
+  77                The current user does not have sufficient permission to
+                    perform the operation.", result.Out.ToString()?.TrimEnd());
       result = await CommandResult.RunAsync(new[] { "read", "-h" }, SubcommandApp.Program.Main_);
-      Assert.AreEqual(@"Read and display the file.
+      Assert.AreEqual(@"Sample app for Argumental
 
-Usage:
-  scl read [--delay <delay>] [--fgcolor <fgcolor>] [--file <file>]
-    [--light-mode]
+read:
+  Read and display the file.
 
-Options:
-  --delay <delay>   Delay between lines, specified as milliseconds per character
-                    in a line. [default: 42]
-  --fgcolor <fgcolor>  Foreground color of text displayed on the console.
-                    [default: White]
-  --file <file>     The file to read and display on the console.
-  --light-mode      Background color of text displayed on the console: default
-                    is black, light mode is white.
-  --version         Show version information
-  -?, -h, --help    Show help and usage information
+  Usage:
+    scl read [--delay <delay>] [--fgcolor <fgcolor>] [--file <file>]
+      [--light-mode]
+
+  Options:
+    --delay <delay>   Delay between lines, specified as milliseconds per
+                      character in a line. [default: 42]
+    --fgcolor <fgcolor>  Foreground color of text displayed on the console.
+                      [default: White]
+    --file <file>     The file to read and display on the console.
+    --light-mode      Background color of text displayed on the console: default
+                      is black, light mode is white.
+    --version         Show version information
+    -?, -h, --help    Show help and usage information
 
 Exit Status:
   0                 The application successfully completed.
@@ -110,22 +124,25 @@ Exit Status:
 forty-two is not a valid value for Int32. (Parameter 'value') -> Input string
 was not in a correct format.
 
-Read and display the file.
+Sample app for Argumental
 
-Usage:
-  scl read [--delay <delay>] [--fgcolor <fgcolor>] [--file <file>]
-    [--light-mode]
+read:
+  Read and display the file.
 
-Options:
-  --delay <delay>   Delay between lines, specified as milliseconds per character
-                    in a line. [default: 42]
-  --fgcolor <fgcolor>  Foreground color of text displayed on the console.
-                    [default: White]
-  --file <file>     The file to read and display on the console.
-  --light-mode      Background color of text displayed on the console: default
-                    is black, light mode is white.
-  --version         Show version information
-  -?, -h, --help    Show help and usage information
+  Usage:
+    scl read [--delay <delay>] [--fgcolor <fgcolor>] [--file <file>]
+      [--light-mode]
+
+  Options:
+    --delay <delay>   Delay between lines, specified as milliseconds per
+                      character in a line. [default: 42]
+    --fgcolor <fgcolor>  Foreground color of text displayed on the console.
+                      [default: White]
+    --file <file>     The file to read and display on the console.
+    --light-mode      Background color of text displayed on the console: default
+                      is black, light mode is white.
+    --version         Show version information
+    -?, -h, --help    Show help and usage information
 
 Exit Status:
   0                 The application successfully completed.

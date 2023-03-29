@@ -10,13 +10,20 @@ namespace Argumental
   /// </summary>
   public class DocOptWriter : IHelpWriter
   {
+    private readonly DocbookWriter _docbook;
+
     /// <inheritdoc />
     public string Format => "docopt";
 
-    /// <inheritdoc />
-    public void Write(HelpContext context, TextWriter writer)
+    public DocOptWriter(DocbookWriter docbook)
     {
-      var xml = new DocbookWriter().Write(context);
+      _docbook = docbook;
+    }
+
+    /// <inheritdoc />
+    public void Write(DocumentationContext context, TextWriter writer)
+    {
+      var xml = _docbook.Write(context);
       VisitElement(xml, new TextWrapper(writer)
       {
         MaxWidth = context.MaxLineWidth ?? 80
@@ -30,18 +37,35 @@ namespace Argumental
         writer.WriteLine((string)element.Element(DocbookSchema.para));
         writer.WriteLine();
       }
-      else if (element.Name == DocbookSchema.refpurpose)
+      else if (element.Name == DocbookSchema.para)
         writer.WriteLine((string)element);
       else if (element.Name == DocbookSchema.cmdsynopsis)
         WriteSynopsis(element, writer);
-      else if (element.Name == DocbookSchema.refsection)
+      else if (element.Name == DocbookSchema.section)
       {
-        writer.WriteLine();
-        writer.WriteLine((string)element.Element(DocbookSchema.title) + ":");
-        writer.IncreaseIndent("  ");
-        foreach (var child in element.Elements().Skip(1))
-          WriteText(child, writer);
-        writer.DecreaseIndent();
+        if (element.Elements()
+          .Where(e => e.Name != DocbookSchema.title)
+          .All(e => e.Name == DocbookSchema.cmdsynopsis))
+        {
+          WriteSynopsis(element.Element(DocbookSchema.cmdsynopsis), writer);
+        }
+        else
+        {
+          writer.WriteLine();
+          writer.WriteLine((string)element.Element(DocbookSchema.title) + ":");
+          writer.IncreaseIndent("  ");
+          if (element.Elements().Any(e => e.Name == DocbookSchema.section))
+          {
+            foreach (var child in element.Elements().Skip(1))
+              VisitElement(child, writer);
+          }
+          else
+          {
+            foreach (var child in element.Elements().Skip(1))
+              WriteText(child, writer);
+          }
+          writer.DecreaseIndent();
+        }
       }
       else
       {

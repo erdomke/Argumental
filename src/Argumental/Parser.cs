@@ -27,6 +27,7 @@ namespace Argumental
       var data = new Dictionary<string, string>(Pipeline.SerializationInfo.OptionComparer);
       var switchMappings = Pipeline.Commands
         .SelectMany(c => c.Properties)
+        .Concat(Pipeline.SerializationInfo.GlobalOptions())
         .Distinct()
         .Select(p => Pipeline.SerializationInfo.Aliases(p))
         .Where(a => a.Skip(1).Any())
@@ -59,10 +60,8 @@ namespace Argumental
       }
 
       if (Command == null)
-      {
-        throw new ConfigurationException(null, new[] { "Required command was not provided." });
-      }
-
+        throw new ConfigurationException(Pipeline, new[] { "Required command was not provided." });
+      
       var properties = Command.Properties.ToList();
       var position = 0;
       for (var i = 0; i < tokens.Count; i++)

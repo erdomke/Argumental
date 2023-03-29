@@ -11,12 +11,20 @@ namespace Argumental
 {
   public class JsonSchemaWriter : IHelpWriter
   {
+    private readonly SerializationInfo _info;
+    private readonly AssemblyMetadata _metadata;
+
     public string Format => "schema+json";
 
-    public void Write(HelpContext context, Stream stream)
+    public JsonSchemaWriter(SerializationInfo info, AssemblyMetadata metadata)
+    {
+      _info = info;
+      _metadata = metadata;
+    }
+
+    public void Write(DocumentationContext context, Stream stream)
     {
       var type = new ObjectType(context.Schemas.SelectMany(s => s.Properties));
-      var info = context.ConfigFormats.GetSerializationInfo<JsonSettingsInfo>();
       using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions()
       {
         Indented = true
@@ -24,15 +32,15 @@ namespace Argumental
       {
         writer.WriteStartObject();
         writer.WriteString("$schema", "https://json-schema.org/draft/2020-12/schema");
-        if (!string.IsNullOrEmpty(context.Metadata.Name))
-          writer.WriteString("title", context.Metadata.Name);
-        if (!string.IsNullOrEmpty(context.Metadata.Description))
-          writer.WriteString("description", context.Metadata.Description);
-        if (!string.IsNullOrEmpty(context.Metadata.Copyright))
-          writer.WriteString("copyright", context.Metadata.Copyright);
-        if (!string.IsNullOrEmpty(context.Metadata.Version))
-          writer.WriteString("version", context.Metadata.Version);
-        Write(writer, info, type);
+        if (!string.IsNullOrEmpty(_metadata.Name))
+          writer.WriteString("title", _metadata.Name);
+        if (!string.IsNullOrEmpty(_metadata.Description))
+          writer.WriteString("description", _metadata.Description);
+        if (!string.IsNullOrEmpty(_metadata.Copyright))
+          writer.WriteString("copyright", _metadata.Copyright);
+        if (!string.IsNullOrEmpty(_metadata.Version))
+          writer.WriteString("version", _metadata.Version);
+        Write(writer, _info, type);
         writer.WriteEndObject();
       }
     }
@@ -190,7 +198,7 @@ namespace Argumental
       writer.WriteEndObject();
     }
 
-    public void Write(HelpContext context, TextWriter writer)
+    public void Write(DocumentationContext context, TextWriter writer)
     {
       Write(context, new WriterStream(writer));
     }

@@ -3,129 +3,124 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 
 namespace Argumental
 {
-  public class DocumentationBuilder // : IConfigurationBuilder
+  public class DocumentationBuilder
   {
-    private readonly List<IHelpWriter> _writers = new List<IHelpWriter>();
-    //private IConfigurationBuilder _builder;
+    private bool _initialized;
+    private Action<DocumentationBuilder> _initializer = DefaultInitialization;
 
-    private List<SerializationInfo> Formats { get; } = new List<SerializationInfo>();
+    public CommandApp App { get; set; }
+    public DocbookWriter Docbook { get; }
+    public Dictionary<int, string> ExitStatuses { get; } = typeof(ExitCode)
+      .GetFields(BindingFlags.Public | BindingFlags.Static)
+      .ToDictionary(f => (int)f.GetRawConstantValue()
+      , f => f.GetCustomAttribute<DescriptionAttribute>().Description);
+    public AssemblyMetadata Metadata { get; set; }
+    public SerializationInfo SerializationInfo { get; set; }
+    public IList<IConfigurationSource> Sources { get; set; }
+    public IList<IDocbookSectionWriter> Sections { get; } = new List<IDocbookSectionWriter>();
+    public IList<IHelpWriter> Writers { get; } = new List<IHelpWriter>();
 
-    public DocumentationBuilder AddSerialization(SerializationInfo info)
+    public DocumentationBuilder()
     {
-      Formats.Add(info);
+      Docbook = new DocbookWriter(GetSections);
+      Writers.Add(Docbook);
+    }
+
+    public DocumentationBuilder SetInitializer(Action<DocumentationBuilder> initializer)
+    {
+      _initializer = initializer;
       return this;
     }
 
-    public DocumentationBuilder AddOrUpdateSerialization<T>(Action<T> update) where T : SerializationInfo, new()
+    private IEnumerable<IDocbookSectionWriter> GetSections()
     {
-      var existing = Formats.OfType<T>().FirstOrDefault();
-      if (existing == null)
+      Initialize();
+      return Sections;
+    }
+
+    public static void DefaultInitialization(DocumentationBuilder builder)
+    {
+      builder.Sections.Add(new FrontMatterSection(builder.Metadata));
+      if (builder.App != null)
+        builder.Sections.Add(new ExitCodeSection(builder.App, builder.ExitStatuses));
+
+      builder.SerializationInfo = builder.SerializationInfo
+        ?? builder.Sources?.OfType<ICommandPipeline>().FirstOrDefault()?.SerializationInfo
+        ?? new CommandLineInfo();
+
+      const string cmdConfigSource = "Microsoft.Extensions.Configuration.CommandLine.CommandLineConfigurationSource";
+      foreach (var group in (builder.Sources ?? Enumerable.Empty<IConfigurationSource>())
+        .GroupBy(s => s is ICommandPipeline pipeline || s.GetType().FullName == cmdConfigSource
+          ? cmdConfigSource
+          : s.GetType().FullName))
       {
-        existing = new T();
-        Formats.Add(existing);
+        if (group.Key == cmdConfigSource
+          && builder.SerializationInfo is CommandLineInfo commandLineInfo)
+        {
+          foreach (var source in group)
+          {
+            if (source.GetType().FullName == cmdConfigSource)
+            {
+              var mappings = (IDictionary<string, string>)source.GetType().GetProperty("SwitchMappings").GetValue(source);
+              if (mappings != null)
+              {
+                foreach (var mapping in mappings)
+                  commandLineInfo.AddAlias(mapping.Key, mapping.Value);
+              }
+            }
+          }
+          builder.Sections.Add(new CommandOptionsSection(commandLineInfo, builder.Metadata));
+          builder.Writers.Insert(0, new DocOptWriter(builder.Docbook));
+        }
+        else if (group.Key == "Microsoft.Extensions.Configuration.EnvironmentVariables.EnvironmentVariablesConfigurationSource")
+        {
+          builder.Sections.Add(new EnvironmentVariableSection(builder.SerializationInfo
+            , group.Select(s => (string)s.GetType().GetProperty("Prefix").GetValue(s)).ToList()));
+        }
+        else if (group.Key == "Microsoft.Extensions.Configuration.Json.JsonConfigurationSource")
+        {
+          builder.Sections.Add(new JsonSettingsSection(builder.SerializationInfo
+            , group.Select(s => (string)s.GetType().GetProperty("Path").GetValue(s)).ToList()));
+          builder.Writers.Add(new JsonSchemaWriter(builder.SerializationInfo, builder.Metadata));
+        }
       }
-      update(existing);
-      return this;
     }
 
-    public DocumentationBuilder AddWriter(IHelpWriter writer)
+    private void Initialize()
     {
-      _writers.Add(writer);
-      return this;
-    }
-
-    public T GetSerializationInfo<T>() where T : SerializationInfo
-    {
-      return Formats.OfType<T>().LastOrDefault();
+      if (!_initialized)
+      {
+        _initializer(this);
+        _initialized = true;
+      }
     }
 
     public void WriteError(TextWriter writer, CommandApp app, ConfigurationException exception)
     {
-      var context = new HelpContext()
+      App = App ?? app;
+      Sources = Sources
+        ?? exception.ConfigurationBuilder?.Sources
+        ?? App?.GetService<IConfigurationBuilder>()?.Sources;
+      SerializationInfo = SerializationInfo ?? exception.Pipeline?.SerializationInfo;
+
+      var context = new DocumentationContext()
       {
-        App = app,
-        ConfigFormats = this,
-        Metadata = app.GetService<AssemblyMetadata>(),
-        Section = exception.SelectedCommand == null ? DocumentationScope.Root : DocumentationScope.Command,
+        Scope = exception.SelectedCommand == null ? DocumentationScope.Root : DocumentationScope.Command,
       };
       context.Errors.AddRange(exception.Errors);
       if (exception.SelectedCommand != null)
         context.Schemas.Add(exception.SelectedCommand);
       else if (exception.Pipeline?.Commands != null)
         context.Schemas.AddRange(exception.Pipeline.Commands);
-      _writers.First().Write(context, writer);
+      Initialize();
+      Writers.First().Write(context, writer);
     }
-
-    public static DocumentationBuilder Default(IConfigurationBuilder builder)
-    {
-      var result = new DocumentationBuilder()
-        .AddWriter(new DocOptWriter())
-        .AddWriter(new DocbookWriter());
-      if (builder != null)
-      {
-        foreach (var source in builder.Sources)
-        {
-          if (source is ICommandPipeline pipeline)
-          {
-            result.AddSerialization(pipeline.SerializationInfo);
-          }
-          else if (source.GetType().FullName == "Microsoft.Extensions.Configuration.CommandLine.CommandLineConfigurationSource")
-          {
-            result.AddOrUpdateSerialization<CommandLineInfo>(c =>
-            {
-              var mappings = (IDictionary<string, string>)source.GetType().GetProperty("SwitchMappings").GetValue(source);
-              if (mappings != null)
-              {
-                foreach (var mapping in mappings)
-                  c.AddAlias(mapping.Key, mapping.Value);
-              }
-            });
-          }
-          else if (source.GetType().FullName == "Microsoft.Extensions.Configuration.EnvironmentVariables.EnvironmentVariablesConfigurationSource")
-          {
-            var prefix = (string)source.GetType().GetProperty("Prefix").GetValue(source);
-            result.AddOrUpdateSerialization<EnvironmentVariableInfo>(e => e.Prefixes.Add(prefix));
-          }
-          else if (source.GetType().FullName == "Microsoft.Extensions.Configuration.Json.JsonConfigurationSource")
-          {
-            var path = (string)source.GetType().GetProperty("Path").GetValue(source);
-            if (!string.IsNullOrEmpty(path))
-            {
-              var existing = result.Formats.OfType<JsonSettingsInfo>().FirstOrDefault();
-              if (existing == null)
-              {
-                existing = new JsonSettingsInfo();
-                result.AddSerialization(existing);
-                result.AddWriter(new JsonSchemaWriter());
-              }
-              existing.Paths.Add(path);
-            }
-          }
-        }
-      }
-      return result;
-    }
-
-    //#region "IConfigurationBuilder"
-    //IDictionary<string, object> IConfigurationBuilder.Properties => _builder.Properties;
-
-    //IList<IConfigurationSource> IConfigurationBuilder.Sources => _builder.Sources;
-
-    //IConfigurationBuilder IConfigurationBuilder.Add(IConfigurationSource source)
-    //{
-    //  _builder.Add(source);
-    //  return this;
-    //}
-
-    //IConfigurationRoot IConfigurationBuilder.Build()
-    //{
-    //  return _builder.Build();
-    //}
-    //#endregion
   }
 }

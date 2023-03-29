@@ -18,8 +18,6 @@ namespace Argumental
       return Array.Empty<ValidationAttribute>();
     }
 
-    public abstract IEnumerable<XElement> DocbookNames(IProperty property);
-
     public virtual object DefaultValue(IProperty property)
     {
       return property.Attributes.OfType<DefaultValueAttribute>().FirstOrDefault()?.Value;
@@ -33,80 +31,6 @@ namespace Argumental
         ?? descripAttr?.Description
         ?? property.Name.OfType<ConfigSection>().LastOrDefault()?.Description
         ?? property.Type.Name?.Description;
-    }
-
-    public virtual IEnumerable<IProperty> Flatten(IEnumerable<IProperty> properties)
-    {
-      var propList = new List<IProperty>();
-      FlattenList(Array.Empty<IConfigSection>()
-        , properties.Where(p => Use(p) < PropertyUse.Hidden)
-        , false
-        , propList);
-      return propList
-        .OrderBy(p => {
-          var use = Use(p);
-          return use == PropertyUse.Required ? -1 : (int)use;
-        })
-        .ThenBy(p => Order(p))
-        .ThenBy(p => Name(p));
-    }
-
-    protected void FlattenList(IEnumerable<IConfigSection> path
-      , IEnumerable<IProperty> properties
-      , bool allowSimpleLists
-      , List<IProperty> result)
-    {
-      foreach (var property in properties)
-      {
-        if (property.Type.IsConvertibleFromString
-          || (property.Type is ArrayType simpleList
-            && simpleList.ValueType.IsConvertibleFromString
-            && allowSimpleLists))
-        {
-          result.Add(path.Any()
-            ? new Property(new ConfigPath(path.Concat(property.Name)), property)
-            : property);
-        }
-        else if (property.Type is ObjectType objectType)
-        {
-          FlattenList(new ConfigPath(path.Concat(property.Name)), objectType.Properties, allowSimpleLists, result);
-        }
-        else
-        {
-          var valueType = property.Type;
-          var newPath = new ConfigPath(path.Concat(property.Name));
-          var count = 0;
-          while (true)
-          {
-            count++;
-            if (valueType is ArrayType arrayType)
-            {
-              newPath.Add(new AnyInteger());
-              valueType = arrayType.ValueType;
-            }
-            else if (valueType is DictionaryType dictionaryType)
-            {
-              newPath.Add(dictionaryType.KeyType is NumberType numberType && numberType.IsInteger
-                ? (IConfigSection)new AnyInteger()
-                : new AnyString());
-              valueType = dictionaryType.ValueType;
-            }
-            else
-            {
-              count--;
-              break;
-            }
-          }
-
-          if (count == 0)
-            throw new InvalidOperationException("Unsupported data type");
-
-          var newProp = new Property(newPath, valueType);
-          foreach (var attr in property.Attributes)
-            newProp.AddAttribute(attr);
-          result.Add(newProp);
-        }
-      }
     }
 
     public virtual bool MaskValue(IProperty property)
@@ -374,7 +298,7 @@ namespace Argumental
         return PropertyUse.Optional;
     }
 
-    protected IEnumerable<IConfigSection> ConfigurationName(IProperty property)
+    public IEnumerable<IConfigSection> ConfigurationName(IProperty property)
     {
       var configKey = property.Attributes
         .OfType<ConfigurationKeyNameAttribute>()

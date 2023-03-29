@@ -18,5 +18,13 @@ namespace Argumental
       SelectedCommand = selectedCommand;
       Errors = errors ?? Enumerable.Empty<string>();
     }
+
+    internal ConfigurationException(ICommandPipeline pipeline, IEnumerable<string> errors = null)
+      : base(errors?.Any() == true ? string.Join("\r\n", errors) : "Configuration error.")
+    {
+      Pipeline = pipeline;
+      SelectedCommand = pipeline?.GetParser().Command;
+      Errors = errors ?? Enumerable.Empty<string>();
+    }
   }
 }

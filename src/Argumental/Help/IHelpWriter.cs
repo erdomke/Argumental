@@ -16,6 +16,6 @@ namespace Argumental
     /// </summary>
     /// <param name="context">Context describing the help to write</param>
     /// <param name="writer">The output to write to</param>
-    void Write(HelpContext context, TextWriter writer);
+    void Write(DocumentationContext context, TextWriter writer);
   }
 }

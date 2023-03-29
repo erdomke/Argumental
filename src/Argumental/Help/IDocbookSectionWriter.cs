@@ -1,9 +1,14 @@
-﻿using System.Xml.Linq;
+﻿using Argumental.Help;
+using System.Collections.Generic;
+using System.Xml;
+using System.Xml.Linq;
 
 namespace Argumental
 {
-  internal interface IDocbookSectionWriter
+  public interface IDocbookSectionWriter
   {
-    XElement Write(HelpContext context);
+    int Order { get; }
+
+    IEnumerable<XElement> Write(DocumentationContext context);
   }
 }

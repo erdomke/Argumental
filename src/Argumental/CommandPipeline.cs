@@ -67,7 +67,7 @@ namespace Argumental
         if (!(_parser.Command is Command<TResult> command))
           throw new InvalidOperationException("Command pipeline was not added to the configuration builder.");
         if (_parser.UnrecognizedTokens.Count > 0 && !command.AllowUnrecognizedTokens)
-          throw new ConfigurationException(command, null);
+          throw new ConfigurationException(command, new[] { "The following tokens were not recognized: " + string.Join(", ", _parser.UnrecognizedTokens) });
         return command.Invoke(configuration, serviceProvider);
       }
       catch (ConfigurationException ex)
@@ -134,7 +134,6 @@ namespace Argumental
         }
       };
       var commandNameOpt = new Option<List<string>>("command", isPositional: true);
-      
       helpCommand.Providers.Add(commandNameOpt);
       helpCommand.Handler = (ctx) =>
       {

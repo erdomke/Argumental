@@ -24,15 +24,10 @@ namespace Argumental
     public static XName para { get; } = docNs + "para";
     public static XName parameter { get; } = docNs + "parameter";
     public static XName property { get; } = docNs + "property";
-    public static XName refentry { get; } = docNs + "refentry";
-    public static XName refname { get; } = docNs + "refname";
-    public static XName refnamediv { get; } = docNs + "refnamediv";
-    public static XName refpurpose { get; } = docNs + "refpurpose";
-    public static XName refsection { get; } = docNs + "refsection";
-    public static XName refsynopsisdiv { get; } = docNs + "refsynopsisdiv";
     public static XName releaseinfo { get; } = docNs + "releaseinfo";
     public static XName replaceable { get; } = docNs + "replaceable";
     public static XName returnvalue { get; } = docNs + "returnvalue";
+    public static XName section { get; } = docNs + "section";
     public static XName term { get; } = docNs + "term";
     public static XName title { get; } = docNs + "title";
     public static XName variablelist { get; } = docNs + "variablelist";

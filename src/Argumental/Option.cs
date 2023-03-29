@@ -9,7 +9,6 @@ namespace Argumental
 {
   public class Option<T> : IOptionProvider<T>, IProperty
   {
-    private bool _isPositional;
     private IDataType _type;
     private List<Attribute> _attributes = new List<Attribute>();
 
@@ -34,7 +33,7 @@ namespace Argumental
     public Option(string name, string description = null, bool isPositional = false)
       : this(new ConfigSection(name, description))
     {
-      _isPositional = isPositional;
+      SetPositional(isPositional);
     }
 
     public Option(params ConfigSection[] parents)

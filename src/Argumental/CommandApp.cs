@@ -32,7 +32,11 @@ namespace Argumental
     public CommandApp(AssemblyMetadata metadata)
     {
       AddSingleton(metadata);
-      AddTransient(s => DocumentationBuilder.Default(s.GetService<IConfigurationBuilder>()));
+      AddSingleton(new DocumentationBuilder()
+      {
+        App = this,
+        Metadata = metadata
+      });
       AddTransient(s => s.GetService<ICommandPipeline>()?.ConfigurationBuilder);
     }
 
